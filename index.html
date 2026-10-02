@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b11">
+  <meta name="description" content="Explore o planeta através de rádios e webcams ao vivo. Uma cidade, uma frequência, agora.">
+  <title>Órbit Atlas — Global Live Radio, Webcams & TV Experience</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Manrope:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="./vendor/maplibre-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="is-orbiting">
+  <div id="fileNotice" hidden class="file-notice">Abra pelo servidor local para explorar o mundo com streams reais. <a href="http://127.0.0.1:4173">Abrir Órbit Atlas ↗</a></div>
+  <script>if(location.protocol==='file:')document.getElementById('fileNotice').hidden=false;</script>
+  <noscript><div class="file-notice">Ative o JavaScript para explorar o Órbit Atlas.</div></noscript>
+
+  <!-- Tela de Abertura Cinematográfica (Requisito 39) -->
+  <section id="welcome" class="welcome hidden" aria-label="Boas-vindas ao Órbit Atlas">
+    <div class="welcome-glow" aria-hidden="true"></div>
+    <div class="welcome-orbit" aria-hidden="true"></div>
+    <div class="welcome-content">
+      <div class="welcome-tag"><span class="pulse-dot"></span> ÓRBIT ATLAS · GLOBAL LIVE EXPERIENCE</div>
+      <h1 class="welcome-title">Listen to the world.<br><span>Watch it live.</span></h1>
+      <p class="welcome-description">Uma plataforma visual e geográfica para explorar o planeta através de estações de rádio, webcams públicas ao vivo, paisagens e sons locais em tempo real.</p>
+      <div class="welcome-actions">
+        <button id="enterAtlas" class="button-primary welcome-btn">
+          <span>EXPLORE THE WORLD</span>
+          <span class="btn-arrow">↗</span>
+        </button>
+      </div>
+      <div class="welcome-badges">
+        <span>RADIO BROWSER API</span>
+        <span>•</span>
+        <span>WINDY WEBCAMS API</span>
+        <span>•</span>
+        <span>CÂMERAS DO MUNDO</span>
+        <span>•</span>
+        <span>LIVE STREAMS</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="ambient ambient-three"></div>
+
+  <!-- Barra de Navegação Minimalista Superior (Requisito 8) -->
+  <header class="topbar">
+    <a class="brand" id="brandHome" href="./" aria-label="Órbit Atlas, página inicial">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="brand-name">órbit atlas</span>
+      <span class="brand-caption">LIVE WORLD</span>
+    </a>
+    <nav class="primary-nav" aria-label="Navegação principal">
+      <button class="nav-item active" data-page="explore">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </span>
+        <span>Explorar</span>
+      </button>
+      <button class="nav-item" data-page="discover">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+          </svg>
+        </span>
+        <span>Descobrir</span>
+      </button>
+      <button class="nav-item" data-page="live">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+        </span>
+        <span>Webcams</span>
+      </button>
+      <button class="nav-item" data-page="tv">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+            <polyline points="17 2 12 7 7 2"></polyline>
+          </svg>
+        </span>
+        <span>Canais de TV</span>
+      </button>
+      <button class="nav-item" data-page="library">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+        </span>
+        <span>Minha coleção</span>
+      </button>
+    </nav>
+
+    <div class="top-actions">
+      <button class="search-trigger" id="openSearch" aria-label="Buscar cidades, rádios, câmeras ou canais de TV, atalho Control K">
+        <span class="search-glass" aria-hidden="true"></span>
+        <span class="search-placeholder">Buscar cidades, rádios, câmeras ou canais de TV</span>
+        <kbd>⌘ K</kbd>
+      </button>
+      <button class="icon-button filter-open" id="filterButton" aria-label="Filtrar conteúdo" title="Filtrar conteúdo">☷</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 10. TELA EXPLORE (EXPERIÊNCIA CENTRAL) -->
+    <section class="main-view" id="exploreView">
+      <section class="hero" id="hero">
+        <div class="hero-copy" id="heroCopy">
+          <div class="eyebrow-row">
+            <span class="eyebrow-line"></span>
+            <button class="eyebrow-btn" id="surpriseButton" title="Viajar para uma nova cidade aleatória" aria-label="Viajar para uma nova cidade aleatória">
+              <span id="heroEyebrow">PRÓXIMO DESTINO</span>
+              <svg class="eyebrow-shuffle-icon" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="16 3 21 3 21 8"></polyline>
+                <line x1="4" y1="20" x2="21" y2="3"></line>
+                <polyline points="21 16 21 21 16 21"></polyline>
+                <line x1="15" y1="15" x2="21" y2="21"></line>
+                <line x1="4" y1="4" x2="9" y2="9"></line>
+              </svg>
+            </button>
+            <span class="eyebrow-divider"></span>
+            <span id="localClock">--:-- LOCAL</span>
+            <span id="localAtmosphere" class="atmosphere-badge">NOITE</span>
+          </div>
+
+          <h1 id="cityTitle">Tóquio<span class="title-period">.</span></h1>
+
+          <div class="geo-line">
+            <div class="coordinates" id="cityCoordinates">JAPÃO · 35.68° N, 139.65° E</div>
+            <button class="place-favorite" id="favoritePlace" aria-label="Salvar cidade" title="Salvar cidade">♡</button>
+          </div>
+
+          <button class="featured-station" id="featuredStation" aria-label="Abrir rádio sugerida">
+            <span class="featured-pulse"></span>
+            <span id="featuredStationName">Sintonizando frequência local</span>
+            <span class="arrow-diagonal">↗</span>
+          </button>
+
+          <!-- 13. CITY EXPERIENCE & REQUISITO DE CONTAGEM REAL -->
+          <div class="city-metrics" id="cityMetrics">
+            <div class="metric-item"><strong id="metricStationCount">—</strong><span>ESTAÇÕES DE RÁDIO</span></div>
+            <div class="metric-separator">•</div>
+            <div class="metric-item"><strong id="metricCameraCount">—</strong><span>CÂMERAS AO VIVO</span></div>
+            <div class="metric-separator">•</div>
+            <div class="metric-item"><strong id="metricTvCount">—</strong><span>CANAIS DE TV</span></div>
+          </div>
+
+          <p class="editorial-copy" id="editorialCopy">Explore o planeta. Escolha uma cidade. Veja o que está acontecendo, ouça o que está tocando e assista à TV local agora.</p>
+
+          <!-- BOTÕES CENTRAIS DE EXPERIÊNCIA DA CIDADE (Requisitos 13 & 16) -->
+          <div class="hero-cta">
+            <button class="button-primary" id="findStation" title="Ver rádios disponíveis nesta cidade">
+              <span class="headphone-icon">♬</span>
+              <span>RÁDIOS</span>
+              <span class="button-divider"></span>
+              <small id="stationCount">—</small>
+            </button>
+
+            <button class="button-secondary camera-cta" id="findCamera" title="Ver câmeras ao vivo nesta cidade">
+              <span class="live-dot"></span>
+              <span>CÂMERAS</span>
+              <span class="button-divider"></span>
+              <small id="cameraCount">—</small>
+            </button>
+
+            <button class="button-secondary tv-cta" id="findTv" title="Ver canais de TV ao vivo nesta região">
+              <span class="tv-dot">📺</span>
+              <span>TV AO VIVO</span>
+              <span class="button-divider"></span>
+              <small id="tvCount">—</small>
+            </button>
+          </div>
+
+          <div class="camera-context hidden" id="cameraContext">
+            <div class="context-live-pill"><span class="live-dot"></span><span>AO VIVO</span></div>
+            <strong id="cameraContextName"></strong>
+            <button id="listenWatch" class="listen-watch">Ouvir + Assistir <span>↗</span></button>
+          </div>
+        </div>
+
+        <!-- 10 & 11. O PALCO GLOBAL (GLOBO 3D & MAPA 2D) -->
+        <div class="world-stage" id="worldStage" aria-label="Globo terrestre 3D interativo e mapa geográfico">
+          <canvas id="dynamicStarfield" class="dynamic-starfield" aria-hidden="true"></canvas>
+          <div class="globe-halo" aria-hidden="true"></div>
+          
+          <div id="globe" class="globe-canvas"></div>
+
+          <!-- MIRA CENTRAL DE SINTONIA DO GLOBO (RADIO GARDEN TUNING RETICLE) -->
+          <div class="tuning-reticle" id="tuningReticle" aria-hidden="true">
+            <div class="reticle-ring">
+              <span class="reticle-cross cross-top"></span>
+              <span class="reticle-cross cross-bottom"></span>
+              <span class="reticle-cross cross-left"></span>
+              <span class="reticle-cross cross-right"></span>
+              <span class="reticle-center-dot"></span>
+            </div>
+            <div class="reticle-badge" id="reticleBadge">
+              <span class="reticle-pulse"></span>
+              <span id="reticleLabel">GIRANDO O PLANETA</span>
+            </div>
+          </div>
+          
+          <div class="globe-fallback" id="globeFallback" aria-hidden="true">
+            <div class="fallback-sphere">
+              <div class="fallback-map"></div>
+              <span class="fallback-light light-a"></span>
+              <span class="fallback-light light-b"></span>
+              <span class="fallback-light light-c"></span>
+            </div>
+          </div>
+
+          <!-- FILTROS DO GLOBO (Requisitos 8, 10) -->
+          <div class="world-toolbar">
+            <div class="type-toggle" role="group" aria-label="Filtrar marcadores">
+              <button class="type-toggle-btn active" data-kind="all">TODOS</button>
+              <button class="type-toggle-btn" data-kind="radio">RÁDIO</button>
+              <button class="type-toggle-btn" data-kind="camera">CÂMERAS</button>
+              <button class="type-toggle-btn" data-kind="tv">TV</button>
+            </div>
+          </div>
+
+          <!-- MAPA 2D -->
+          <div class="map-panel hidden" id="mapPanel" aria-label="Visualização do mapa 2D"></div>
+          <div class="map-attribution hidden" id="mapAttribution">© OpenStreetMap · © OpenFreeMap · MapLibre</div>
+
+          <!-- 15. LIVE CAMERA EXPERIENCE (PLAYER CINEMATOGRÁFICO) -->
+          <div class="camera-panel hidden" id="cameraPanel">
+            <div class="camera-frame" id="cameraFrame"></div>
+            <div class="camera-vignette"></div>
+            <div class="camera-topline hidden" style="display:none !important;" aria-hidden="true">
+              <span class="live-pill" id="cameraStatus"><i></i> AO VIVO</span>
+              <span id="cameraLocalTime">--:-- LOCAL</span>
+            </div>
+            <div class="camera-caption">
+              <span class="camera-provider" id="cameraProvider">TRANSMISSÃO AO VIVO</span>
+              <h2 id="cameraTitle">Câmera ao vivo</h2>
+              <p id="cameraLocation"></p>
+            </div>
+            <div class="camera-actions">
+              <button id="cameraAudioBtn" class="cam-btn cam-btn-secondary" aria-label="Alternar áudio da transmissão" title="Ativar ou desativar áudio">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="cameraAudioIcon">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                <span id="cameraAudioLabel">Som</span>
+              </button>
+              <button id="cameraFavorite" class="cam-btn cam-btn-icon" aria-label="Salvar câmera nos favoritos" title="Salvar câmera nos favoritos">♡</button>
+              <button id="changeCamera" class="cam-btn cam-btn-secondary" aria-label="Trocar câmera nesta cidade" title="Trocar câmera">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                <span>Trocar</span>
+              </button>
+              <button id="minimizeCamera" class="cam-btn cam-btn-secondary" aria-label="Minimizar câmera para floating player" title="Minimizar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/></svg>
+                <span>Mini</span>
+              </button>
+              <button id="fullscreenCamera" class="cam-btn cam-btn-icon cam-btn-fullscreen" aria-label="Tela cheia" title="Tela cheia">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
+              <button id="closeCameraView" class="cam-btn cam-btn-icon cam-btn-close" aria-label="Fechar visualizador de câmera" title="Fechar câmera">
+                <svg width="16" height="16" viewBox="0 0 25 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- CONTROLES DO GLOBO E NAVEGAÇÃO -->
+          <div class="map-controls" aria-label="Controles do mapa">
+            <button id="zoomIn" aria-label="Aproximar" title="Aproximar">+</button>
+            <button id="zoomOut" aria-label="Afastar" title="Afastar">−</button>
+            <span class="control-divider"></span>
+            <button id="resetGlobe" aria-label="Reorientar globo" title="Reorientar">↺</button>
+            <button id="locateMe" aria-label="Ir para cidade mais próxima" title="Minha localização">◎</button>
+          </div>
+
+          <!-- LEGENDA DOS MARCADORES (Requisito 7) -->
+          <div class="map-legend" id="mapLegend">
+            <span><i class="legend-radio"></i> RÁDIO</span>
+            <span><i class="legend-cam"></i> LIVE CAM</span>
+            <span><i class="legend-tv"></i> CANAL TV</span>
+          </div>
+
+          <button class="back-to-globe hidden" id="backToGlobe">← Voltar ao globo</button>
+        </div>
+      </section>
+
+
+    </section>
+
+    <!-- 20. SEÇÃO DISCOVER (CURADORIA EDITORIAL) -->
+    <section class="secondary-view hidden" id="discoverView">
+      <div class="secondary-heading">
+        <div class="section-eyebrow">JANELAS PARA O PLANETA</div>
+        <h1>Descobrir<span>.</span></h1>
+        <p>Curadorias temáticas de som, imagem, ritmo e paisagens ao vivo pelo mundo.</p>
+      </div>
+      <div class="editorial-grid" id="discoverGrid"></div>
+    </section>
+
+    <!-- 22. SEÇÃO LIVE AROUND THE WORLD (TOUR CINEMATOGRÁFICO / SCREENSAVER GLOBAL) -->
+    <section class="secondary-view hidden" id="liveView">
+      <div class="secondary-heading">
+        <div class="section-eyebrow"><span class="live-dot"></span> AO VIVO PELO MUNDO</div>
+        <h1>Uma volta ao planeta<span>.</span></h1>
+        <p>Experiência cinematográfica contínua: o sistema percorre capitais e cidades a cada intervalo com câmera ao vivo e rádio local.</p>
+      </div>
+
+      <div class="tour-banner">
+        <div class="tour-status">
+          <div class="tour-counter-ring">
+            <span id="tourProgressNumber">12</span>s
+          </div>
+          <div class="tour-info">
+            <span class="tour-now-eyebrow">DESTINO ATUAL</span>
+            <h3 id="tourNowCity">Tóquio, Japão</h3>
+            <p id="tourNowDetail">Sintonizando frequência e transmitindo imagens ao vivo</p>
+          </div>
+        </div>
+        <div class="tour-actions">
+          <button class="button-primary" id="startTour">
+            <span>▶</span>
+            <span>Iniciar Volta ao Mundo</span>
+          </button>
+          <button class="button-quiet stop-tour hidden" id="stopTour">
+            <span>⏸</span>
+            <span>Pausar</span>
+          </button>
+          <button class="button-quiet" id="nextTourCity">
+            <span>⏭ Próximo destino</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="live-destinations-title">CIDADES NO ROTEIRO DA VIAGEM:</div>
+      <div class="live-destinations" id="liveDestinations"></div>
+
+      <!-- 23. TV GARDEN — CÂMERAS DO MUNDO AO VIVO (CATÁLOGO GLOBAL) -->
+      <div class="tvgarden-section" id="tvgardenSection">
+        <div class="tvgarden-header">
+          <div class="tvgarden-intro">
+            <div class="section-eyebrow"><span class="live-dot"></span> TV GARDEN · 4.000+ TRANSMISSÕES EM 95 PAÍSES</div>
+            <h2>Câmeras do Mundo ao Vivo</h2>
+            <p>Transmissões abertas e autorizadas de cidades, praias, avenidas, monumentos e paisagens do planeta em tempo real.</p>
+          </div>
+          <div class="tvgarden-search-box">
+            <span class="search-glass" aria-hidden="true"></span>
+            <input type="search" id="tvgardenSearchInput" placeholder="Buscar câmera ou cidade (ex: Shibuya, Copacabana, Roma, Times Square...)" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="tvgarden-country-bar">
+          <div class="tvgarden-country-pills" id="tvgardenCountryFilters" role="tablist" aria-label="Filtro de câmeras por país">
+            <!-- Pílulas preenchidas dinamicamente via JS -->
+          </div>
+          <div class="tvgarden-country-select-wrap">
+            <label for="tvgardenCountrySelect">Mais países:</label>
+            <select id="tvgardenCountrySelect" aria-label="Selecione qualquer país da lista de 95 países"></select>
+          </div>
+        </div>
+
+        <div class="tvgarden-metrics-strip" id="tvgardenMetricsStrip">
+          <span id="tvgardenShowingCount">Sintonizando transmissões globais...</span>
+          <span class="metrics-source">Fonte: <a href="https://tvgarden.world/webcams" target="_blank" rel="noopener noreferrer">TV Garden Webcams ↗</a></span>
+        </div>
+
+        <div class="tvgarden-grid" id="tvgardenGrid" aria-label="Catálogo de webcams ao vivo"></div>
+
+        <div class="tvgarden-footer">
+          <button class="button-secondary" id="tvgardenLoadMore">
+            <span>Carregar mais transmissões</span>
+            <span>↓</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEÇÃO TV (CANAIS DE TELEVISÃO AO VIVO DO TV GARDEN) -->
+    <section class="secondary-view hidden" id="tvView">
+      <div class="secondary-heading">
+        <div class="section-eyebrow"><span class="tv-dot">📺</span> CANAIS DE TV AO VIVO PELO MUNDO</div>
+        <h1>Televisão Global<span>.</span></h1>
+        <p>Mais de 6.700 canais de televisão aberta, notícias, esportes e cultura de 172 países transmitindo em tempo real.</p>
+      </div>
+
+      <div class="tvgarden-section" id="tvSection">
+        <div class="tvgarden-header">
+          <div class="tvgarden-intro">
+            <div class="section-eyebrow"><span class="tv-dot">📺</span> TV GARDEN · 6.700+ CANAIS EM 172 PAÍSES</div>
+            <h2>Emissoras e Redes de TV</h2>
+            <p>Selecione um país no globo ou na barra de busca para sintonizar as principais redes de TV mundiais ao vivo.</p>
+          </div>
+          <div class="tvgarden-search-box">
+            <span class="search-glass" aria-hidden="true"></span>
+            <input type="search" id="tvSearchInput" placeholder="Buscar canal ou país (ex: Globo, CNN, BBC, TV Cultura, Band, ESPN...)" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="tvgarden-country-bar">
+          <div class="tvgarden-country-pills" id="tvCountryFilters" role="tablist" aria-label="Filtro de canais por país">
+            <!-- Pílulas preenchidas dinamicamente via JS -->
+          </div>
+          <div class="tvgarden-country-select-wrap">
+            <label for="tvCountrySelect">Mais países:</label>
+            <select id="tvCountrySelect" aria-label="Selecione qualquer país da lista de 172 países"></select>
+          </div>
+        </div>
+
+        <div class="tvgarden-metrics-strip" id="tvMetricsStrip">
+          <span id="tvShowingCount">Sintonizando canais de TV mundiais...</span>
+          <span class="metrics-source">Fonte: <a href="https://tvgarden.world/tv" target="_blank" rel="noopener noreferrer">TV Garden TV ↗</a></span>
+        </div>
+
+        <div class="tvgarden-grid" id="tvGrid" aria-label="Catálogo de canais de TV ao vivo"></div>
+
+        <div class="tvgarden-footer">
+          <button class="button-secondary" id="tvLoadMore">
+            <span>Carregar mais canais</span>
+            <span>↓</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 24 & 25. SEÇÃO LIBRARY (FAVORITOS E JORNADAS RECENTES) -->
+    <section class="secondary-view hidden" id="libraryView">
+      <div class="secondary-heading">
+        <div class="section-eyebrow">SEU DIÁRIO DE VIAGEM</div>
+        <h1>Minha coleção<span>.</span></h1>
+        <p>Estações prediletas, câmeras salvas, cidades favoritas e o histórico das suas últimas jornadas.</p>
+      </div>
+      <div class="library-tabs" role="tablist">
+        <button class="library-tab active" data-library="stations">Rádios salvas</button>
+        <button class="library-tab" data-library="cameras">Câmeras salvas</button>
+        <button class="library-tab" data-library="places">Cidades favoritas</button>
+        <button class="library-tab" data-library="recent">Jornadas recentes</button>
+      </div>
+      <div class="library-list" id="libraryList"></div>
+    </section>
+
+    <!-- 17. DRAWER DE ESTAÇÕES E CÂMERAS -->
+    <section class="station-drawer hidden" id="stationDrawer" aria-label="Frequências e transmissões da região">
+      <div class="drawer-head">
+        <div>
+          <div class="section-eyebrow" id="drawerEyebrow">FREQUÊNCIAS DA REGIÃO</div>
+          <h2 id="drawerTitle">Rádios perto de Tóquio</h2>
+        </div>
+        <button class="icon-button drawer-close" id="closeDrawer" aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-summary" id="drawerSummary"></div>
+      <div class="station-list" id="stationList"></div>
+      <button class="load-more hidden" id="loadMore">Carregar mais estações <span>↓</span></button>
+    </section>
+
+    <!-- 19. MINI LIVE PLAYER FLUTUANTE (PICTURE-IN-PICTURE IN-APP) -->
+    <aside class="mini-player hidden" id="miniPlayer" aria-label="Mini player de câmera flutuante">
+      <div class="mini-frame" id="miniFrame"></div>
+      <div class="mini-info">
+        <span class="live-pill"><i></i> AO VIVO</span>
+        <strong id="miniTitle">Câmera ao vivo</strong>
+        <small id="miniPlace">Cidade</small>
+      </div>
+      <button id="expandMini" aria-label="Expandir câmera" title="Expandir visualizador">↗</button>
+      <button id="closeMini" aria-label="Fechar câmera" title="Fechar transmissão">×</button>
+    </aside>
+  </main>
+
+  <!-- 18. PLAYER DE RÁDIO PERSISTENTE INFERIOR -->
+  <footer class="player hidden" id="radioPlayer" aria-label="Player de rádio global">
+    <div class="player-station">
+      <div class="station-cover" id="playerCover"><span>RA</span></div>
+      <div class="player-meta">
+        <span class="player-eyebrow">VOCÊ ESTÁ OUVINDO</span>
+        <strong id="playerStationName">Escolha uma frequência</strong>
+        <small id="playerStationPlace">O mundo está a um play de distância</small>
+        <span class="now-playing-track hidden" id="nowPlayingTrack">♪ Faixa ao vivo</span>
+      </div>
+      <button class="favorite-button" id="favoriteStation" aria-label="Salvar rádio" title="Favoritar rádio">♡</button>
+    </div>
+
+    <div class="player-center">
+      <div class="transport">
+        <button id="previousStation" aria-label="Estação anterior" title="Estação anterior">|◂</button>
+        <button class="play-button" id="playPause" aria-label="Reproduzir rádio" title="Reproduzir / Pausar">
+          <span class="play-shape"></span>
+        </button>
+        <button id="nextStation" aria-label="Próxima estação" title="Próxima estação">▸|</button>
+      </div>
+      <div class="play-state">
+        <span class="equalizer" id="equalizer"><i></i><i></i><i></i><i></i><i></i></span>
+        <span id="streamStatus"><i class="status-dot"></i> PRONTO PARA SINTONIZAR</span>
+      </div>
+    </div>
+
+    <div class="player-tools">
+      <button class="tool-button volume-icon" id="muteButton" aria-label="Silenciar áudio" title="Mudo / Volume">
+        <svg class="vol-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path class="vol-wave-1" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path class="vol-wave-2" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          <line class="vol-mute-line hidden" x1="23" y1="9" x2="17" y2="15"></line>
+          <line class="vol-mute-line hidden" x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+      </button>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.75" aria-label="Volume de áudio">
+      
+      <div class="sleep-wrapper">
+        <button class="tool-button sleep-button" id="sleepButton" aria-label="Temporizador de sono" title="Timer de desligamento automático">
+          <span class="sleep-icon">☾</span>
+          <span class="sleep-badge hidden" id="sleepBadge"></span>
+        </button>
+        <!-- Popover com muitas opções de tempo de desligamento -->
+        <div class="sleep-timer-popover hidden" id="sleepTimerPopover" role="dialog" aria-label="Opções de temporizador de sono">
+          <div class="sleep-popover-header">
+            <span class="sleep-popover-title">DESLIGAMENTO AUTOMÁTICO</span>
+            <button class="sleep-popover-close" id="closeSleepPopover" aria-label="Fechar">×</button>
+          </div>
+          <div class="sleep-options-grid">
+            <button class="sleep-opt" data-minutes="5">5 min</button>
+            <button class="sleep-opt" data-minutes="10">10 min</button>
+            <button class="sleep-opt" data-minutes="15">15 min</button>
+            <button class="sleep-opt" data-minutes="20">20 min</button>
+            <button class="sleep-opt" data-minutes="30">30 min</button>
+            <button class="sleep-opt" data-minutes="45">45 min</button>
+            <button class="sleep-opt" data-minutes="60">1 hora</button>
+            <button class="sleep-opt" data-minutes="90">1h 30m</button>
+            <button class="sleep-opt" data-minutes="120">2 horas</button>
+            <button class="sleep-opt" data-minutes="180">3 horas</button>
+          </div>
+          <button class="sleep-opt sleep-cancel-opt hidden" id="cancelSleepTimer" data-minutes="0">Desativar temporizador</button>
+        </div>
+      </div>
+
+      <button class="tool-button share-button" id="shareButton" aria-label="Compartilhar rádio" title="Compartilhar">⤴</button>
+      <a id="stationSource" class="station-source hidden" target="_blank" rel="noopener noreferrer">Fonte ↗</a>
+      <button class="tool-button close-player-button" id="closeRadioPlayer" aria-label="Fechar player de rádio" title="Fechar player">×</button>
+    </div>
+
+    <audio id="audioPlayer" preload="none"></audio>
+  </footer>
+
+  <!-- 9. COMMAND PALETTE GLOBAL (BUSCA ⌘K / CTRL+K) -->
+  <div class="command-backdrop hidden" id="searchBackdrop">
+    <section class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="searchHeading">
+      <h2 id="searchHeading" class="sr-only">Buscar no Órbit Atlas</h2>
+      <div class="command-input-row">
+        <span class="search-glass"></span>
+        <input id="commandInput" type="search" placeholder="Busque por cidades, países, rádios, câmeras ou gêneros (ex: Tokyo, Jazz, Copacabana...)" autocomplete="off">
+        <kbd>ESC</kbd>
+      </div>
+      <div class="command-hint">Navegue pelas setas do teclado e pressione Enter para viajar</div>
+      <div class="command-results" id="commandResults" role="listbox" aria-label="Resultados da busca"></div>
+      <div class="command-footer">
+        <span>↑ ↓ navegar</span>
+        <span>↵ selecionar</span>
+        <span>ESC fechar</span>
+        <span>ÓRBIT ATLAS · LIVE WORLD</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="filter-popover hidden" id="filterPopover">
+    <span class="section-eyebrow">MOSTRAR NO MAPA</span>
+    <div class="filter-options">
+      <button class="type-toggle-btn active" data-kind="all">Todos</button>
+      <button class="type-toggle-btn" data-kind="radio">Rádio</button>
+      <button class="type-toggle-btn" data-kind="camera">Câmeras</button>
+      <button class="type-toggle-btn" data-kind="tv">TV</button>
+    </div>
+    <p>Fontes oficiais e disponibilidade ao vivo conforme cada fornecedor.</p>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="./vendor/globe.gl.min.js"></script>
+  <script src="./vendor/hls.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

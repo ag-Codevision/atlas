@@ -1,0 +1,26 @@
+export const cities = [
+  { id: "tokyo", name: "Tóquio", english: "Tokyo", country: "Japão", countryCode: "JP", lat: 35.6762, lon: 139.6503, timezone: "Asia/Tokyo" },
+  { id: "sao-paulo", name: "São Paulo", english: "São Paulo", country: "Brasil", countryCode: "BR", lat: -23.5505, lon: -46.6333, timezone: "America/Sao_Paulo" },
+  { id: "london", name: "Londres", english: "London", country: "Reino Unido", countryCode: "GB", lat: 51.5072, lon: -0.1276, timezone: "Europe/London" },
+  { id: "new-york", name: "Nova York", english: "New York", country: "Estados Unidos", countryCode: "US", lat: 40.7128, lon: -74.0060, timezone: "America/New_York" },
+  { id: "paris", name: "Paris", english: "Paris", country: "França", countryCode: "FR", lat: 48.8566, lon: 2.3522, timezone: "Europe/Paris" },
+  { id: "rio", name: "Rio de Janeiro", english: "Rio de Janeiro", country: "Brasil", countryCode: "BR", lat: -22.9068, lon: -43.1729, timezone: "America/Sao_Paulo" },
+  { id: "lisbon", name: "Lisboa", english: "Lisbon", country: "Portugal", countryCode: "PT", lat: 38.7223, lon: -9.1393, timezone: "Europe/Lisbon" },
+  { id: "berlin", name: "Berlim", english: "Berlin", country: "Alemanha", countryCode: "DE", lat: 52.52, lon: 13.405, timezone: "Europe/Berlin" },
+  { id: "amsterdam", name: "Amsterdã", english: "Amsterdam", country: "Países Baixos", countryCode: "NL", lat: 52.3676, lon: 4.9041, timezone: "Europe/Amsterdam" },
+  { id: "seoul", name: "Seul", english: "Seoul", country: "Coreia do Sul", countryCode: "KR", lat: 37.5665, lon: 126.978, timezone: "Asia/Seoul" },
+  { id: "rome", name: "Roma", english: "Rome", country: "Itália", countryCode: "IT", lat: 41.9028, lon: 12.4964, timezone: "Europe/Rome" },
+  { id: "barcelona", name: "Barcelona", english: "Barcelona", country: "Espanha", countryCode: "ES", lat: 41.3851, lon: 2.1734, timezone: "Europe/Madrid" },
+  { id: "buenos-aires", name: "Buenos Aires", english: "Buenos Aires", country: "Argentina", countryCode: "AR", lat: -34.6037, lon: -58.3816, timezone: "America/Argentina/Buenos_Aires" },
+  { id: "mexico-city", name: "Cidade do México", english: "Mexico City", country: "México", countryCode: "MX", lat: 19.4326, lon: -99.1332, timezone: "America/Mexico_City" },
+  { id: "bangkok", name: "Bangkok", english: "Bangkok", country: "Tailândia", countryCode: "TH", lat: 13.7563, lon: 100.5018, timezone: "Asia/Bangkok" },
+  { id: "singapore", name: "Singapura", english: "Singapore", country: "Singapura", countryCode: "SG", lat: 1.3521, lon: 103.8198, timezone: "Asia/Singapore" },
+  { id: "sydney", name: "Sydney", english: "Sydney", country: "Austrália", countryCode: "AU", lat: -33.8688, lon: 151.2093, timezone: "Australia/Sydney" },
+  { id: "cape-town", name: "Cidade do Cabo", english: "Cape Town", country: "África do Sul", countryCode: "ZA", lat: -33.9249, lon: 18.4241, timezone: "Africa/Johannesburg" },
+  { id: "reykjavik", name: "Reykjavík", english: "Reykjavik", country: "Islândia", countryCode: "IS", lat: 64.1466, lon: -21.9426, timezone: "Atlantic/Reykjavik" },
+  { id: "san-francisco", name: "São Francisco", english: "San Francisco", country: "Estados Unidos", countryCode: "US", lat: 37.7749, lon: -122.4194, timezone: "America/Los_Angeles" },
+  { id: "dubai", name: "Dubai", english: "Dubai", country: "Emirados Árabes", countryCode: "AE", lat: 25.2048, lon: 55.2708, timezone: "Asia/Dubai" },
+  { id: "cairo", name: "Cairo", english: "Cairo", country: "Egito", countryCode: "EG", lat: 30.0444, lon: 31.2357, timezone: "Africa/Cairo" },
+  { id: "salvador", name: "Salvador", english: "Salvador", country: "Brasil", countryCode: "BR", lat: -12.9777, lon: -38.5016, timezone: "America/Bahia" }
+];
+

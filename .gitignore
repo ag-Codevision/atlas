@@ -1,0 +1,9 @@
+.env
+node_modules/
+npm-debug.log*
+*.log
+screenshot*.png
+screenshot-*.png
+test-results/
+scratch/
+.system_generated/
