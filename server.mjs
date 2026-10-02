@@ -50,7 +50,7 @@ function rateAllowed(req) {
   return bucket.count<=180;
 }
 const textMatch=(a,b)=>String(a||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(String(b||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase());
-async function api(req,res,url) {
+export async function api(req,res,url) {
   if (!rateAllowed(req)) return json(res,429,{error:'Muitas consultas. Aguarde um instante.'},{'retry-after':'60'});
   const params=url.searchParams,path=url.pathname;
   if (path==='/api/health') return json(res,200,{app:'Órbit Atlas',status:'ok',version:'1.2.0'});

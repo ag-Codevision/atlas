@@ -5,15 +5,15 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node --watch server.mjs"
+    "dev": "node --watch server.mjs",
+    "build": "echo 'Build ready for Orbit Atlas'"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "globe.gl": "^2.46.2",
-    "hls.js": "^1.6.18",
-    "maplibre-gl": "^6.11.2"
+    "hls.js": "^1.6.18"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"
