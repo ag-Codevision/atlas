@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node --watch server.mjs",
-    "build": "echo 'Build ready for Orbit Atlas'"
+    "dev": "node --watch server.mjs"
   },
   "engines": {
     "node": ">=20"
