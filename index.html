@@ -130,7 +130,57 @@
             </button>
             <span class="eyebrow-divider"></span>
             <span id="localClock">--:-- LOCAL</span>
-            <span id="localAtmosphere" class="atmosphere-badge">NOITE</span>
+            <button id="localAtmosphere" class="atmosphere-badge" title="Ver previsão meteorológica detalhada da Windy" aria-label="Previsão meteorológica">
+              <span id="atmosphereIcon">🌙</span>
+              <span id="atmosphereLabel">NOITE</span>
+            </button>
+          </div>
+
+          <!-- CARD EXPANSÍVEL DE PREVISÃO METEOROLÓGICA (WINDY POINT FORECAST) -->
+          <div id="weatherForecastCard" class="weather-forecast-card hidden" aria-label="Previsão meteorológica detalhada">
+            <div class="weather-card-header">
+              <div class="weather-card-brand">
+                <span class="weather-pulse-dot"></span>
+                <span class="weather-card-provider">WINDY POINT FORECAST</span>
+              </div>
+              <button id="closeWeatherCard" class="weather-card-close" title="Fechar" aria-label="Fechar previsão">✕</button>
+            </div>
+            <div class="weather-card-main">
+              <div class="weather-card-temp-group">
+                <span class="weather-card-icon" id="weatherCardIcon">☀️</span>
+                <span class="weather-card-temp" id="weatherCardTemp">--°</span>
+              </div>
+              <div class="weather-card-desc">
+                <strong id="weatherCardCondition">Carregando previsão...</strong>
+                <span id="weatherCardCity">Local</span>
+              </div>
+            </div>
+            <div class="weather-card-grid">
+              <div class="weather-metric">
+                <span class="weather-metric-label">VENTO</span>
+                <strong id="weatherCardWind">-- km/h</strong>
+              </div>
+              <div class="weather-metric">
+                <span class="weather-metric-label">RAJADAS</span>
+                <strong id="weatherCardGust">-- km/h</strong>
+              </div>
+              <div class="weather-metric">
+                <span class="weather-metric-label">UMIDADE</span>
+                <strong id="weatherCardHumidity">--%</strong>
+              </div>
+              <div class="weather-metric">
+                <span class="weather-metric-label">PRESSÃO</span>
+                <strong id="weatherCardPressure">-- hPa</strong>
+              </div>
+            </div>
+            <div class="weather-timeline-title">PRÓXIMAS HORAS</div>
+            <div class="weather-hourly-timeline" id="weatherHourlyTimeline"></div>
+            <div class="weather-card-footer">
+              <button id="weatherOpenMapBtn" class="weather-open-map-btn" title="Abrir visualização de ventos em movimento no mapa">
+                <span>Ver Mapa de Ventos & Radar (Windy)</span>
+                <span class="weather-btn-arrow">↗</span>
+              </button>
+            </div>
           </div>
 
           <h1 id="cityTitle">Tóquio<span class="title-period">.</span></h1>
@@ -227,11 +277,38 @@
               <button class="type-toggle-btn" data-kind="camera">CÂMERAS</button>
               <button class="type-toggle-btn" data-kind="tv">TV</button>
             </div>
+            <button class="windy-map-trigger-btn" id="toggleWindyMap" title="Visualizar mapa de vento e radar em tempo real por Windy" aria-label="Mapa de Ventos e Clima Windy">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+                <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+                <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+              </svg>
+              <span>VENTOS & RADAR</span>
+            </button>
           </div>
 
           <!-- MAPA 2D -->
           <div class="map-panel hidden" id="mapPanel" aria-label="Visualização do mapa 2D"></div>
           <div class="map-attribution hidden" id="mapAttribution">© OpenStreetMap · © OpenFreeMap · MapLibre</div>
+
+          <!-- MAPA METEOROLÓGICO WINDY COM VENTOS ANIMADOS EM TEMPO REAL -->
+          <div class="windy-map-panel hidden" id="windyMapPanel" aria-label="Mapa Meteorológico Windy com Ventos em Tempo Real">
+            <div class="windy-map-header">
+              <div class="windy-map-info">
+                <span class="windy-map-live-dot"></span>
+                <span id="windyMapCityTitle">VENTOS AO VIVO</span>
+                <span class="windy-brand-tag">WINDY MAP FORECAST</span>
+              </div>
+              <div class="windy-layers-bar">
+                <button class="windy-layer-btn active" data-windy-layer="wind">Ventos</button>
+                <button class="windy-layer-btn" data-windy-layer="rain">Chuva / Radar</button>
+                <button class="windy-layer-btn" data-windy-layer="temp">Temperatura</button>
+                <button class="windy-layer-btn" data-windy-layer="clouds">Nuvens</button>
+              </div>
+              <button id="closeWindyMapBtn" class="windy-close-btn" title="Voltar ao globo" aria-label="Fechar mapa meteorológico">✕</button>
+            </div>
+            <div class="windy-map-frame-wrapper" id="windyMapFrameWrapper"></div>
+          </div>
 
           <!-- 15. LIVE CAMERA EXPERIENCE (PLAYER CINEMATOGRÁFICO) -->
           <div class="camera-panel hidden" id="cameraPanel">

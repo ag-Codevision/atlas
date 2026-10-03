@@ -20,6 +20,11 @@ const state = {
   libraryTab: "stations",
   loadingStations: false,
   loadingCameras: false,
+  weather: null,
+  weatherLoading: false,
+  weatherRequestId: 0,
+  windyMapOpen: false,
+  windyMapLayer: "wind",
   map: null,
   mapMarkers: [],
   globe: null,
@@ -347,12 +352,7 @@ function updateCityCopy() {
   $("localClock").textContent = timeStr + " LOCAL";
   $("cameraLocalTime").textContent = timeStr + " LOCAL";
 
-  const atmosphere = getAtmosphere(city);
-  const badge = $("localAtmosphere");
-  if (badge) {
-    badge.className = `atmosphere-badge ${atmosphere.type}`;
-    badge.textContent = `${atmosphere.label} ${atmosphere.icon}`;
-  }
+  renderWeather();
 
   if ($("globeCityName")) $("globeCityName").textContent = (city.english || city.name).toLocaleUpperCase("pt-BR");
   $("drawerTitle").textContent =
@@ -375,11 +375,13 @@ function selectCity(id, options = {}) {
   if (changed) {
     state.stationRequestId += 1;
     state.cameraRequestId += 1;
+    state.weatherRequestId += 1;
     state.loadingStations = false;
     state.stations = [];
     state.offset = 0;
     state.cameras = [];
     state.camera = null;
+    state.weather = null;
 
     $("cameraFrame").innerHTML = "";
     $("miniFrame").innerHTML = "";
@@ -418,6 +420,149 @@ function selectCity(id, options = {}) {
   if (changed || !state.stations.length) loadStations(false);
   loadCameras();
   loadTvChannels();
+  loadWeather();
+  if (state.windyMapOpen) updateWindyMap();
+}
+
+// INTEGRAÇÃO WINDY POINT FORECAST (PREVISÃO METEOROLÓGICA)
+async function loadWeather() {
+  const city = state.city;
+  if (!city || city.lat == null || city.lon == null) return;
+  const requestId = ++state.weatherRequestId;
+  state.weatherLoading = true;
+
+  try {
+    const data = await request(`/api/weather?lat=${encodeURIComponent(city.lat)}&lon=${encodeURIComponent(city.lon)}`);
+    if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
+    state.weather = data;
+    renderWeather();
+  } catch (err) {
+    if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
+    state.weather = null;
+    renderWeather();
+  } finally {
+    if (requestId === state.weatherRequestId) state.weatherLoading = false;
+  }
+}
+
+function renderWeather() {
+  const city = state.city;
+  const weather = state.weather;
+  const badge = $("localAtmosphere");
+  const iconSpan = $("atmosphereIcon");
+  const labelSpan = $("atmosphereLabel");
+
+  if (weather && weather.temperature != null) {
+    if (badge) {
+      badge.className = `atmosphere-badge ${weather.type || 'day'}`;
+      if (iconSpan) iconSpan.textContent = weather.icon || "☀️";
+      if (labelSpan) labelSpan.textContent = `${weather.temperature}°C · ${weather.condition}`;
+      badge.title = `Clima em ${cityName(city)}: ${weather.condition}, ${weather.temperature}°C. Vento: ${weather.windSpeed} km/h. Clique para abrir a previsão detalhada da Windy.`;
+    }
+
+    if ($("weatherCardIcon")) $("weatherCardIcon").textContent = weather.icon || "☀️";
+    if ($("weatherCardTemp")) $("weatherCardTemp").textContent = `${weather.temperature}°`;
+    if ($("weatherCardCondition")) $("weatherCardCondition").textContent = weather.condition;
+    if ($("weatherCardCity")) $("weatherCardCity").textContent = `${cityName(city)}, ${city.country || ''}`;
+    if ($("weatherCardWind")) $("weatherCardWind").textContent = `${weather.windSpeed} km/h`;
+    if ($("weatherCardGust")) $("weatherCardGust").textContent = `${weather.windGust} km/h`;
+    if ($("weatherCardHumidity")) $("weatherCardHumidity").textContent = `${weather.humidity}%`;
+    if ($("weatherCardPressure")) $("weatherCardPressure").textContent = `${weather.pressure} hPa`;
+
+    const timeline = $("weatherHourlyTimeline");
+    if (timeline && weather.hourly && weather.hourly.length) {
+      timeline.innerHTML = weather.hourly.map((step) => {
+        const d = new Date(step.time || step.timestamp);
+        const hours = String(d.getHours()).padStart(2, '0') + ':00';
+        return `
+          <div class="weather-hourly-step">
+            <span class="step-time">${hours}</span>
+            <span class="step-icon">${step.icon || '☀️'}</span>
+            <span class="step-temp">${step.temperature}°</span>
+          </div>
+        `;
+      }).join('');
+    }
+  } else {
+    const atmosphere = getAtmosphere(city);
+    if (badge) {
+      badge.className = `atmosphere-badge ${atmosphere.type}`;
+      if (iconSpan) iconSpan.textContent = atmosphere.icon;
+      if (labelSpan) labelSpan.textContent = atmosphere.label;
+      badge.title = `Condição estimada em ${cityName(city)}. Clique para carregar a previsão Windy.`;
+    }
+  }
+}
+
+function toggleWeatherCard(force) {
+  const card = $("weatherForecastCard");
+  if (!card) return;
+  const isHidden = card.classList.contains("hidden");
+  const nextOpen = force !== undefined ? force : isHidden;
+  card.classList.toggle("hidden", !nextOpen);
+  if (nextOpen && !state.weather && !state.weatherLoading) {
+    loadWeather();
+  }
+}
+
+// INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TEMPO REAL)
+function toggleWindyMap(force, layer) {
+  const panel = $("windyMapPanel");
+  const btn = $("toggleWindyMap");
+  if (!panel) return;
+
+  if (layer) state.windyMapLayer = layer;
+  const isHidden = panel.classList.contains("hidden");
+  const shouldOpen = force !== undefined ? force : isHidden;
+  state.windyMapOpen = shouldOpen;
+
+  panel.classList.toggle("hidden", !shouldOpen);
+  btn?.classList.toggle("active", shouldOpen);
+
+  if (shouldOpen) {
+    $("mapPanel")?.classList.add("hidden");
+    $("cameraPanel")?.classList.add("hidden");
+    $("stationDrawer")?.classList.add("hidden");
+    $("weatherForecastCard")?.classList.add("hidden");
+    updateWindyMap();
+  }
+}
+
+function updateWindyMap() {
+  if (!state.windyMapOpen) return;
+  const wrapper = $("windyMapFrameWrapper");
+  if (!wrapper) return;
+  const city = state.city;
+  const title = $("windyMapCityTitle");
+  if (title) title.textContent = `${cityName(city).toUpperCase()} · VENTOS & RADAR AO VIVO`;
+
+  const layer = state.windyMapLayer || 'wind';
+  const overlayMap = {
+    wind: 'wind',
+    rain: 'rain',
+    temp: 'temp',
+    clouds: 'clouds'
+  };
+  const overlay = overlayMap[layer] || 'wind';
+  const key = state.cameraConfig?.windyMapKey || '';
+
+  document.querySelectorAll("[data-windy-layer]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.windyLayer === layer);
+  });
+
+  const url = `https://embed.windy.com/embed2.html?lat=${encodeURIComponent(city.lat)}&lon=${encodeURIComponent(city.lon)}&detailLat=${encodeURIComponent(city.lat)}&detailLon=${encodeURIComponent(city.lon)}&width=100%25&height=100%25&zoom=7&level=surface&overlay=${overlay}&product=ecmwf&menu=&message=&marker=true&calendar=now&pressure=true&type=map&location=coordinates&detail=true&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1${key ? `&key=${encodeURIComponent(key)}` : ''}`;
+
+  let iframe = wrapper.querySelector("iframe");
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.title = "Mapa de Previsão e Ventos Windy";
+    iframe.allow = "fullscreen";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    wrapper.appendChild(iframe);
+  }
+  if (iframe.src !== url) {
+    iframe.src = url;
+  }
 }
 
 // CARREGAMENTO DE RÁDIOS (RADIO BROWSER)
@@ -1351,11 +1496,20 @@ function setCamera(camera) {
   frame.innerHTML = "";
 
   if (!state.cameraPlayerInstance) {
-    state.cameraPlayerInstance = new CameraPlayer(frame, (failedCam) => {
-      showToast(`A transmissão de ${failedCam.name} não respondeu.`);
-    });
+    state.cameraPlayerInstance = new CameraPlayer(
+      frame,
+      (failedCam) => {
+        showToast(`A transmissão de ${failedCam.name} não respondeu.`);
+      },
+      () => {
+        updateAudioButtonUI();
+      }
+    );
   } else {
     state.cameraPlayerInstance.frame = frame;
+    state.cameraPlayerInstance.onVolumeChange = () => {
+      updateAudioButtonUI();
+    };
   }
   state.cameraPlayerInstance.open(camera);
 
@@ -3559,6 +3713,21 @@ function setupEvents() {
     else openStationDrawer();
   });
 
+  // Recursos Windy API: Previsão do Tempo (Point Forecast) e Mapa de Ventos (Map Forecast)
+  $("localAtmosphere")?.addEventListener("click", () => toggleWeatherCard());
+  $("closeWeatherCard")?.addEventListener("click", () => toggleWeatherCard(false));
+  $("weatherOpenMapBtn")?.addEventListener("click", () => {
+    toggleWeatherCard(false);
+    toggleWindyMap(true);
+  });
+  $("toggleWindyMap")?.addEventListener("click", () => toggleWindyMap());
+  $("closeWindyMapBtn")?.addEventListener("click", () => toggleWindyMap(false));
+  document.querySelectorAll("[data-windy-layer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      toggleWindyMap(true, btn.dataset.windyLayer);
+    });
+  });
+
   // Drawer
   $("closeDrawer")?.addEventListener("click", closeStationDrawer);
   $("loadMore")?.addEventListener("click", () => loadStations(true));
@@ -3880,6 +4049,7 @@ async function start() {
   loadStations(false);
   loadCameras();
   loadTvChannels();
+  loadWeather();
 
   // Carregamento progressivo e escalonado dos catálogos mundiais pesados
   // Permite que a aplicação abra instantaneamente leve, sem travamentos na thread principal

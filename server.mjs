@@ -6,16 +6,28 @@ import { cities } from './shared/cities.js';
 import { coordinate, inBounds, clusterPoints, distanceKm } from './shared/geo.js';
 import { nearbyStations, countryStations, globalStations, searchStations, radioBrowser, stationHealth } from './lib/providers/radio-browser.mjs';
 import { cameras, cameraDetail, cameraSources } from './lib/providers/cameras.mjs';
+import { windyForecastProvider } from './lib/providers/windy-forecast.mjs';
 import { getRadioGardenPlaces, findNearestPlace, getRadioGardenStations, resolveStreamUrl, searchRadioGarden } from './lib/providers/radio-garden.mjs';
 import { getTvGardenWebcams, getAllTvGardenWebcams, getTvGardenCountries, searchTvGardenWebcams, getTvGardenChannels, getTvGardenTvCountries, getAllTvGardenChannels, searchTvGardenChannels, getTvGardenWebcamPoints, getTvGardenTvPoints } from './lib/providers/tv-garden.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('.',import.meta.url)));
 try {
   for (const line of (await readFile(resolve(ROOT,'.env'),'utf8')).split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-    if (match && !(match[1] in process.env)) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g,'');
+    const match = line.match(/^\s*([^#=]+?)\s*=\s*(.*?)\s*$/);
+    if (match) {
+      const rawKey = match[1].trim();
+      const val = match[2].trim().replace(/^['"]|['"]$/g,'');
+      if (!(rawKey in process.env)) process.env[rawKey] = val;
+      const normalizedKey = rawKey.toUpperCase().replace(/[\s-]+/g, '_');
+      if (!(normalizedKey in process.env)) process.env[normalizedKey] = val;
+    }
   }
 } catch (error) { if (error.code !== 'ENOENT') console.warn('Não foi possível ler .env:',error.message); }
+
+// Normalização das chaves Windy
+if (!process.env.WINDY_API_KEY && (process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams)) {
+  process.env.WINDY_API_KEY = process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams;
+}
 
 const publicFiles = new Map(['index.html','styles.css','app.js','shared/cities.js','shared/geo.js','shared/stations-global.json','client/runtime.js','client/camera-player.js'].map(file=>['/'+file,file]));
 for (const file of ['maplibre-gl.mjs','maplibre-gl-shared.mjs','maplibre-gl-worker.mjs','maplibre-gl.css']) publicFiles.set('/vendor/'+file,'node_modules/maplibre-gl/dist/'+file);
@@ -54,7 +66,32 @@ export async function api(req,res,url) {
   if (!rateAllowed(req)) return json(res,429,{error:'Muitas consultas. Aguarde um instante.'},{'retry-after':'60'});
   const params=url.searchParams,path=url.pathname;
   if (path==='/api/health') return json(res,200,{app:'Global Syncro',status:'ok',version:'1.2.0'});
-  if (path==='/api/config') return json(res,200,{windyConfigured:Boolean(process.env.WINDY_API_KEY),cameraSources,radioProvider:'Radio Browser',cameraProvider:'Windy Webcams'});
+  if (path==='/api/config') {
+    const webcamsKey = process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams || process.env.WINDY_API_KEY || '';
+    const mapKey = process.env.WINDY_API_KEY_MAP_FORECAST || process.env.WINDY_API_KEY_MAP || process.env.WINDY_API_KEY_Map_Forecast || process.env['WINDY_API_KEY_Map Forecast'] || '';
+    const pointKey = process.env.WINDY_API_KEY_POINT_FORECAST || process.env.WINDY_API_KEY_POINT || process.env.WINDY_API_KEY_Point_Forecast || process.env['WINDY_API_KEY_Point Forecast'] || '';
+    return json(res,200,{
+      windyConfigured: Boolean(webcamsKey),
+      windyWebcamsConfigured: Boolean(webcamsKey),
+      windyPointConfigured: Boolean(pointKey),
+      windyMapConfigured: Boolean(mapKey),
+      windyMapKey: mapKey,
+      cameraSources,
+      radioProvider:'Radio Browser',
+      cameraProvider:'Windy Webcams'
+    });
+  }
+  if (path==='/api/weather') {
+    const lat = coordinate(params.get('lat'), -90, 90);
+    const lon = coordinate(params.get('lon'), -180, 180);
+    if (lat === null || lon === null) return json(res, 400, { error: 'Coordenadas inválidas para previsão do tempo.' });
+    try {
+      const weather = await windyForecastProvider.getWeather(lat, lon);
+      return json(res, 200, weather);
+    } catch (err) {
+      return json(res, 500, { error: 'Falha ao obter previsão: ' + err.message });
+    }
+  }
   if (path==='/api/stations/global') {
     try {
       const stations = await globalStations(Math.floor(number(params,'limit',1000,50,2000)));
