@@ -506,7 +506,7 @@ async function loadRadioGardenPlaces() {
         size: item.size || 1
       }));
       state.radioGardenLoaded = true;
-      console.log(`Radio Atlas: ${state.radioGardenPlaces.length} cidades do Radio Garden carregadas.`);
+      console.log(`Global Syncro: ${state.radioGardenPlaces.length} cidades do Radio Garden carregadas.`);
       
       // Sintoniza a cidade inicial se nenhuma estiver travada
       if (!state.currentRadioGardenPlace) {
@@ -531,7 +531,7 @@ async function loadGlobalWebcamPoints() {
     if (data && Array.isArray(data.points) && data.points.length > 0) {
       state.globalWebcamPoints = data.points;
       state.globalWebcamPointsLoaded = true;
-      console.log(`Radio Atlas: ${state.globalWebcamPoints.length} webcams geolocalizadas carregadas no globo.`);
+      console.log(`Global Syncro: ${state.globalWebcamPoints.length} webcams geolocalizadas carregadas no globo.`);
       updateGlobePoints();
     }
   } catch (err) {
@@ -548,7 +548,7 @@ async function loadGlobalTvPoints() {
     if (data && Array.isArray(data.points) && data.points.length > 0) {
       state.globalTvPoints = data.points;
       state.globalTvPointsLoaded = true;
-      console.log(`Radio Atlas: ${state.globalTvPoints.length} canais de TV geolocalizados carregados no globo.`);
+      console.log(`Global Syncro: ${state.globalTvPoints.length} canais de TV geolocalizados carregados no globo.`);
       updateGlobePoints();
     }
   } catch (err) {
@@ -861,7 +861,7 @@ async function loadGlobalStations() {
     const data = await request("/api/stations/global?limit=1500");
     if (data && Array.isArray(data.stations) && data.stations.length > 0) {
       state.globalStations = data.stations;
-      console.log(`Radio Atlas: ${state.globalStations.length} estações mundiais ativas no mapa.`);
+      console.log(`Global Syncro: ${state.globalStations.length} estações mundiais ativas no mapa.`);
       updateGlobePoints();
       if (state.view === "city" && state.map) renderMapMarkers();
     }
@@ -3707,10 +3707,10 @@ function setupEvents() {
 
   // Compartilhamento
   $("shareButton").addEventListener("click", async () => {
-    const title = state.station?.name || "Órbit Atlas";
+    const title = state.station?.name || "Global Syncro";
     const url = window.location.href;
     try {
-      if (navigator.share) await navigator.share({ title: `${title} · Órbit Atlas`, url });
+      if (navigator.share) await navigator.share({ title: `${title} · Global Syncro`, url });
       else {
         await navigator.clipboard.writeText(url);
         showToast("Link copiado para a área de transferência!");

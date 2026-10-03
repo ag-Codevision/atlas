@@ -1,4 +1,4 @@
-# Radio Atlas — Global Live Radio & Webcam Experience
+# Global Syncro — Global Live Radio, Webcam & TV Experience
 
 Plataforma visual, geográfica e cinematográfica para explorar o planeta Terra através de:
 - Estações de rádio locais ao vivo (via Radio Browser API em tempo real);

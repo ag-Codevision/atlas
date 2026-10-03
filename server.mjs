@@ -53,7 +53,7 @@ const textMatch=(a,b)=>String(a||'').normalize('NFD').replace(/[\u0300-\u036f]/g
 export async function api(req,res,url) {
   if (!rateAllowed(req)) return json(res,429,{error:'Muitas consultas. Aguarde um instante.'},{'retry-after':'60'});
   const params=url.searchParams,path=url.pathname;
-  if (path==='/api/health') return json(res,200,{app:'Órbit Atlas',status:'ok',version:'1.2.0'});
+  if (path==='/api/health') return json(res,200,{app:'Global Syncro',status:'ok',version:'1.2.0'});
   if (path==='/api/config') return json(res,200,{windyConfigured:Boolean(process.env.WINDY_API_KEY),cameraSources,radioProvider:'Radio Browser',cameraProvider:'Windy Webcams'});
   if (path==='/api/stations/global') {
     try {
@@ -304,6 +304,6 @@ export function createApp() {
 }
 if (process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const port=Number(process.env.PORT||4173),host=process.env.HOST||'127.0.0.1';
-  createApp().listen(port,host,()=>console.log('Órbit Atlas: http://'+host+':'+port));
+  createApp().listen(port,host,()=>console.log('Global Syncro: http://'+host+':'+port));
 }
 
