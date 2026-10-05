@@ -96,37 +96,132 @@ function decodeWeatherCode(code) {
   return map[code] || 'Tempo local';
 }
 
-async function fetchWikiAirport(name, iata) {
-  try {
-    const q = iata ? `${iata} airport` : `${name} airport`;
-    const sUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&utf8=&format=json`;
-    const sRes = await fetch(sUrl, {
-      headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
-      signal: AbortSignal.timeout(4500)
-    });
-    if (!sRes.ok) return null;
-    const sJson = await sRes.json();
-    const hit = sJson.query?.search?.[0];
-    if (!hit) return null;
+const airportKeywords = /(aeroporto|aer[oó]dromo|pista|avia[cç][aã]o|base a[eé]rea|terminal|aeron[aá]utic|voo|iata|icao|airport)/i;
 
-    const sumUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`;
-    const sumRes = await fetch(sumUrl, {
-      headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
-      signal: AbortSignal.timeout(4500)
-    });
-    if (!sumRes.ok) return null;
-    const sum = await sumRes.json();
-    return {
-      title: sum.title,
-      description: sum.description || '',
-      extract: sum.extract || '',
-      photo: sum.originalimage?.source || sum.thumbnail?.source || null,
-      thumbnail: sum.thumbnail?.source || null,
-      url: sum.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`
-    };
-  } catch {
-    return null;
+function buildAirportPtDescription(apt) {
+  const porteMap = {
+    large: 'de grande porte (internacional)',
+    medium: 'de médio porte',
+    small: 'regional / de pequeno porte',
+    heliport: 'heliponto',
+    seaplane: 'hidrobase aquática',
+    closed: 'desativado'
+  };
+  const porte = porteMap[(apt.type || '').toLowerCase()] || 'comercial e regional';
+  const elevM = apt.elev != null ? Math.round(apt.elev * 0.3048) : null;
+  const elevTxt = elevM != null ? ` a ${elevM} metros (${apt.elev} pés) de altitude` : '';
+  const loc = [apt.city, apt.country].filter(Boolean).join(', ');
+  const codes = [];
+  if (apt.iata) codes.push(`IATA: ${apt.iata}`);
+  if (apt.id && apt.id.length === 4 && !/^\d/.test(apt.id)) codes.push(`ICAO: ${apt.id}`);
+  const codeTxt = codes.length > 0 ? ` (${codes.join(', ')})` : '';
+  return `O ${apt.name}${codeTxt} é um aeródromo ${porte} localizado em ${loc || 'sua região geográfica'}${elevTxt}. Possui coordenadas geográficas em ${apt.lat.toFixed(3)}° e ${apt.lon.toFixed(3)}°, atendendo operações de navegação aérea, transporte de passageiros e aviação geral.`;
+}
+
+async function fetchWikiAirport(apt) {
+  if (!apt) return null;
+  const cleanName = (apt.name || '')
+    .replace(/international\s*airport/i, '')
+    .replace(/airport/i, '')
+    .replace(/aeroporto\s*internacional/i, '')
+    .replace(/aeroporto/i, '')
+    .trim();
+
+  const queries = [
+    apt.city ? `Aeroporto de ${apt.city}` : null,
+    cleanName ? `Aeroporto ${cleanName}` : null,
+    apt.iata ? `Aeroporto ${apt.iata}` : null,
+    apt.name
+  ].filter(Boolean);
+
+  let wikiHit = null;
+
+  for (const q of queries) {
+    try {
+      const sUrl = `https://pt.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&utf8=&format=json`;
+      const sRes = await fetch(sUrl, {
+        headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (!sRes.ok) continue;
+      const sJson = await sRes.json();
+      const hits = sJson.query?.search || [];
+      const match = hits.find((h) => {
+        const text = (h.title + ' ' + h.snippet).toLowerCase();
+        const mentionsTarget = (apt.city && text.includes(apt.city.toLowerCase())) ||
+                               (cleanName && text.includes(cleanName.toLowerCase())) ||
+                               (apt.iata && text.includes(apt.iata.toLowerCase()));
+        return airportKeywords.test(text) && mentionsTarget && !text.includes('pode referir-se a') && !text.includes('desambiguação');
+      });
+
+      if (match) {
+        const sumUrl = `https://pt.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(match.title)}`;
+        const sumRes = await fetch(sumUrl, {
+          headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+          signal: AbortSignal.timeout(3500)
+        });
+        if (sumRes.ok) {
+          const sum = await sumRes.json();
+          const sumText = (sum.title + ' ' + (sum.extract || '')).toLowerCase();
+          const mentionsTarget = (apt.city && sumText.includes(apt.city.toLowerCase())) ||
+                                 (cleanName && sumText.includes(cleanName.toLowerCase())) ||
+                                 (apt.iata && sumText.includes(apt.iata.toLowerCase()));
+          if (sum.extract && airportKeywords.test(sum.extract) && mentionsTarget && sum.type !== 'disambiguation') {
+            const photo = sum.originalimage?.source || sum.thumbnail?.source || null;
+            wikiHit = {
+              title: sum.title,
+              description: sum.description || '',
+              extract: sum.extract,
+              photo: photo && !photo.endsWith('.svg') ? photo : null,
+              url: sum.content_urls?.desktop?.page || null
+            };
+            break;
+          }
+        }
+      }
+    } catch {}
   }
+
+  // Se não achou foto na pt.wikipedia, tenta buscar apenas FOTO na en.wikipedia para aeroportos internacionais
+  let photo = wikiHit?.photo || null;
+  if (!photo && (cleanName || apt.iata)) {
+    try {
+      const eq = cleanName ? `${cleanName} airport` : `${apt.iata} international airport`;
+      const eUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(eq)}&utf8=&format=json`;
+      const eRes = await fetch(eUrl, {
+        headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+        signal: AbortSignal.timeout(3000)
+      });
+      if (eRes.ok) {
+        const eData = await eRes.json();
+        const eHits = eData.query?.search || [];
+        const eMatch = eHits.find(h => {
+          const t = (h.title + ' ' + h.snippet).toLowerCase();
+          return airportKeywords.test(t) && (t.includes(cleanName.toLowerCase()) || (apt.city && t.includes(apt.city.toLowerCase())));
+        });
+        if (eMatch) {
+          const eSumUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(eMatch.title)}`;
+          const eSumRes = await fetch(eSumUrl, {
+            headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+            signal: AbortSignal.timeout(3000)
+          });
+          if (eSumRes.ok) {
+            const eSum = await eSumRes.json();
+            const ePhoto = eSum.originalimage?.source || eSum.thumbnail?.source || null;
+            if (ePhoto && !ePhoto.endsWith('.svg')) photo = ePhoto;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return {
+    title: wikiHit?.title || apt.name,
+    description: wikiHit?.description || '',
+    extract: wikiHit?.extract || buildAirportPtDescription(apt),
+    photo: photo || null,
+    url: wikiHit?.url || null
+  };
 }
 
 async function findAirportWebcams(lat, lon, iata, name, maxKm = 65) {
@@ -523,7 +618,7 @@ export async function api(req,res,url) {
 
     try {
       const [wiki, webcams, weather] = await Promise.all([
-        fetchWikiAirport(apt.name, apt.iata),
+        fetchWikiAirport(apt),
         findAirportWebcams(lat, lon, apt.iata, apt.name, 65),
         fetchAirportWeather(lat, lon)
       ]);

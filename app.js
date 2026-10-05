@@ -662,42 +662,77 @@ async function selectAirport(apt) {
   const tempEl = $("airportTemp");
   const windEl = $("airportWind");
   const extractEl = $("airportExtract");
+  const mediaContainer = $("airportMediaContainer");
+  const mediaTabs = $("airportMediaTabs");
+  const tabPhoto = $("tabAirportPhoto");
   const tabCam = $("tabAirportCam");
+  const photoWrapper = $("airportPhotoWrapper");
+  const photoImg = $("airportPhoto");
+  const photoFallback = $("airportPhotoFallback");
+  const photoCaption = $("airportPhotoCaption");
   const camsListGroup = $("airportCamsListGroup");
   const camPlayer = $("airportCamPlayer");
 
-  if (typeBadge) typeBadge.textContent = (apt.type || "AEROPORTO").toUpperCase();
-  if (iataBadgeEl) iataBadgeEl.textContent = apt.iata || "---";
-  if (icaoBadgeEl) icaoBadgeEl.textContent = apt.icao || "----";
+  // Badges explicativos e em Português do Brasil
+  const typeMap = {
+    large: "GRANDE PORTE",
+    medium: "MÉDIO PORTE",
+    small: "PEQUENO PORTE",
+    heliport: "HELIPONTO",
+    seaplane: "HIDROBASE",
+    closed: "DESATIVADO"
+  };
+  const rawType = (apt.type || "").toLowerCase();
+  const typeText = typeMap[rawType] || (apt.typeLabel ? apt.typeLabel.toUpperCase() : "AEROPORTO");
+  if (typeBadge) {
+    typeBadge.textContent = typeText;
+    typeBadge.title = `Classificação de porte operacional: ${typeText}`;
+  }
+
+  // Badge IATA (Associação Internacional de Transportes Aéreos - 3 letras)
+  if (iataBadgeEl) {
+    if (apt.iata && apt.iata.length === 3) {
+      iataBadgeEl.textContent = `IATA: ${apt.iata}`;
+      iataBadgeEl.title = `Código IATA da aviação comercial: ${apt.iata}`;
+      iataBadgeEl.classList.remove("hidden");
+    } else {
+      iataBadgeEl.classList.add("hidden");
+    }
+  }
+
+  // Badge ICAO (Organização da Aviação Civil Internacional - 4 letras)
+  const icaoCode = apt.icao || (apt.id && apt.id.length === 4 && !/^\d/.test(apt.id) ? apt.id : null);
+  if (icaoBadgeEl) {
+    if (icaoCode) {
+      icaoBadgeEl.textContent = `ICAO: ${icaoCode}`;
+      icaoBadgeEl.title = `Código ICAO de navegação aérea: ${icaoCode}`;
+      icaoBadgeEl.classList.remove("hidden");
+    } else {
+      icaoBadgeEl.classList.add("hidden");
+    }
+  }
+
   if (nameEl) nameEl.textContent = apt.name || "Aeroporto";
   if (locEl) locEl.textContent = loc || "Localização Global";
   if (elevEl) elevEl.textContent = apt.elev != null ? `${apt.elev} ft` : "-- ft";
   if (coordsEl) coordsEl.textContent = `${apt.lat.toFixed(3)}°, ${apt.lon.toFixed(3)}°`;
   if (tempEl) tempEl.textContent = "--°C";
   if (windEl) windEl.textContent = "-- kt";
-  if (extractEl) extractEl.textContent = "Consultando informações aeronáuticas, meteorologia e transmissões ao vivo...";
+  if (extractEl) extractEl.textContent = "Consultando informações aeronáuticas em português e meteorologia local...";
 
-  // Reseta abas de mídia para Foto Aérea inicialmente
-  setAirportMediaTab("photo");
-  tabCam?.classList.add("hidden");
-  camsListGroup?.classList.add("hidden");
+  // Inicialmente esconde contêiner de mídia até checar se há fotos ou webcams reais
+  if (mediaContainer) mediaContainer.classList.add("hidden");
+  if (photoWrapper) photoWrapper.classList.add("hidden");
+  if (tabPhoto) tabPhoto.classList.add("hidden");
+  if (tabCam) tabCam.classList.add("hidden");
+  if (camsListGroup) camsListGroup.classList.add("hidden");
   if (camPlayer) camPlayer.innerHTML = "";
-  state.currentAirportCam = null;
-
-  // Estado de carregamento da foto
-  const photoImg = $("airportPhoto");
-  const photoFallback = $("airportPhotoFallback");
-  const photoCaption = $("airportPhotoCaption");
   if (photoImg) {
-    photoImg.classList.add("hidden");
     photoImg.src = "";
+    photoImg.classList.add("hidden");
   }
-  if (photoFallback) {
-    photoFallback.classList.remove("hidden");
-    const fbText = $("airportFallbackText");
-    if (fbText) fbText.textContent = `Carregando imagem de ${apt.name}...`;
-  }
-  if (photoCaption) photoCaption.textContent = "Wikimedia Commons";
+  if (photoFallback) photoFallback.classList.add("hidden");
+  state.currentAirportCam = null;
 
   // Links preliminares imediatos
   const fr24Btn = $("airportFlightradarBtn");
@@ -724,50 +759,37 @@ async function selectAirport(apt) {
     const res = await request(`/api/airport/detail?${query.toString()}`);
     if (currentReqId !== airportRequestId || !res) return;
 
-    // 1. Dados enciclopédicos da Wikipédia e Foto em alta definição
-    if (res.wiki) {
-      const photoUrl = typeof res.wiki.photo === "string" ? res.wiki.photo : res.wiki.photo?.url;
-      if (photoUrl) {
-        if (photoImg) {
-          photoImg.src = photoUrl;
-          photoImg.alt = res.wiki.title || apt.name;
-          photoImg.classList.remove("hidden");
-        }
-        if (photoFallback) photoFallback.classList.add("hidden");
-        if (photoCaption) photoCaption.textContent = res.wiki.title || "Wikimedia Commons";
-      } else {
-        if (photoFallback) {
-          photoFallback.classList.remove("hidden");
-          const fbText = $("airportFallbackText");
-          if (fbText) fbText.textContent = `${apt.name} · Vista Aérea Global`;
-        }
-      }
-
-      if (res.wiki.extract && extractEl) {
-        extractEl.textContent = res.wiki.extract;
-      } else if (extractEl) {
-        extractEl.textContent = "Aeroporto em operação comercial com pistas homologadas e conexões internacionais.";
-      }
-
-      if (wikiBtn && res.wiki.wikiUrl) {
-        wikiBtn.href = res.wiki.wikiUrl;
-      }
-    }
-
-    // 2. Meteorologia Aeronáutica em Tempo Real (Ventos em Nós 'kt' e Temperatura)
-    if (res.weather) {
-      if (tempEl && res.weather.temp != null) tempEl.textContent = `${res.weather.temp}°C`;
-      const windKt = res.weather.windKnots != null ? res.weather.windKnots : (res.weather.windKt != null ? res.weather.windKt : null);
-      const windKmh = res.weather.windKmh != null ? res.weather.windKmh : null;
-      const windDir = res.weather.windDirection != null ? `${res.weather.windDirection}°` : (res.weather.windDir || "");
-      if (windEl && windKt != null) {
-        windEl.textContent = `${windKt} kt (${windKmh || Math.round(windKt * 1.852)} km/h ${windDir})`.trim();
-      }
-    }
-
-    // 3. Webcams ao Vivo e Transmissões Próximas
+    // 1. Dados e Foto real do aeroporto
+    const photoUrl = typeof res.wiki?.photo === "string" ? res.wiki.photo : res.wiki?.photo?.url;
     const cams = Array.isArray(res.webcams) ? res.webcams : (res.webcams?.primary ? [res.webcams.primary, ...(res.webcams.others || [])] : []);
-    if (cams.length > 0) {
+    const hasPhoto = Boolean(photoUrl);
+    const hasCams = cams.length > 0;
+
+    // Se houver foto aérea real:
+    if (hasPhoto) {
+      if (photoImg) {
+        photoImg.src = photoUrl;
+        photoImg.alt = res.wiki?.title || apt.name;
+        photoImg.classList.remove("hidden");
+      }
+      if (photoFallback) photoFallback.classList.add("hidden");
+      if (photoCaption) photoCaption.textContent = res.wiki?.title || "Wikimedia Commons";
+      photoWrapper?.classList.remove("hidden");
+      tabPhoto?.classList.remove("hidden");
+      setAirportMediaTab("photo");
+    } else {
+      // Quando não há foto, NÃO exibe parte de foto aérea nem fallback de aviãozinho
+      if (photoImg) {
+        photoImg.src = "";
+        photoImg.classList.add("hidden");
+      }
+      if (photoFallback) photoFallback.classList.add("hidden");
+      photoWrapper?.classList.add("hidden");
+      tabPhoto?.classList.add("hidden");
+    }
+
+    // 2. Webcams ao Vivo e Transmissões Próximas
+    if (hasCams) {
       const primaryCam = cams[0];
       state.currentAirportCam = primaryCam;
       tabCam?.classList.remove("hidden");
@@ -780,10 +802,12 @@ async function selectAirport(apt) {
           : `Distância: ~${primaryCam.distanceKm || 0} km`;
       }
 
-      // Aba de webcam fica destacada e pronta para alternar
-      tabCam?.classList.remove("hidden");
+      // Se não há foto real, foca diretamente na webcam
+      if (!hasPhoto) {
+        setAirportMediaTab("cam");
+      }
 
-      // Lista de câmeras adicionais na região
+      // Lista de outras câmeras na região
       if (cams.length > 1) {
         const others = cams.slice(1, 5);
         const listEl = $("airportCamsList");
@@ -817,9 +841,46 @@ async function selectAirport(apt) {
           camsListGroup?.classList.remove("hidden");
         }
       }
+    } else {
+      tabCam?.classList.add("hidden");
+      camsListGroup?.classList.add("hidden");
     }
 
-    // 4. Links de Rastreamento de Voos (FlightRadar24)
+    // Controle de visibilidade do contêiner de mídia:
+    if (hasPhoto || hasCams) {
+      mediaContainer?.classList.remove("hidden");
+      // Se houver ambas as mídias (foto e webcam), mostra a barra de abas para alternar
+      if (hasPhoto && hasCams) {
+        mediaTabs?.classList.remove("hidden");
+      } else {
+        mediaTabs?.classList.add("hidden");
+      }
+    } else {
+      // Quando não há foto nem webcam, esconde o contêiner completamente
+      mediaContainer?.classList.add("hidden");
+    }
+
+    // 3. Texto enciclopédico sobre o aeroporto SEMPRE em Português do Brasil
+    if (extractEl) {
+      extractEl.textContent = res.wiki?.extract || "Aeroporto com infraestrutura ativa para operações da aviação civil.";
+    }
+
+    if (wikiBtn && res.wiki?.url) {
+      wikiBtn.href = res.wiki.url;
+    }
+
+    // 4. Meteorologia Aeronáutica em Tempo Real (Ventos em Nós 'kt' e Temperatura)
+    if (res.weather) {
+      if (tempEl && res.weather.temp != null) tempEl.textContent = `${res.weather.temp}°C`;
+      const windKt = res.weather.windKnots != null ? res.weather.windKnots : (res.weather.windKt != null ? res.weather.windKt : null);
+      const windKmh = res.weather.windKmh != null ? res.weather.windKmh : null;
+      const windDir = res.weather.windDirection != null ? `${res.weather.windDirection}°` : (res.weather.windDir || "");
+      if (windEl && windKt != null) {
+        windEl.textContent = `${windKt} kt (${windKmh || Math.round(windKt * 1.852)} km/h ${windDir})`.trim();
+      }
+    }
+
+    // 5. Links de Rastreamento de Voos (FlightRadar24)
     if (res.links && res.links.flightradar24 && fr24Btn) {
       fr24Btn.href = res.links.flightradar24;
     }
