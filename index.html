@@ -176,10 +176,7 @@
             <div class="weather-timeline-title">PRÓXIMAS HORAS</div>
             <div class="weather-hourly-timeline" id="weatherHourlyTimeline"></div>
             <div class="weather-card-footer">
-              <button id="weatherOpenGlobeBtn" class="weather-open-globe-btn" title="Forma B: Ativar correntes e vetores de vento 3D na esfera do Globo">
-                <span>🌐 Ventos 3D no Globo</span>
-              </button>
-              <button id="weatherOpenMapBtn" class="weather-open-map-btn" title="Forma A: Ver mapa interativo e radar da Windy em tela cheia">
+              <button id="weatherOpenMapBtn" class="weather-open-map-btn" title="Ver mapa interativo e radar da Windy em tela cheia">
                 <span>🌪️ Radar Windy (Tela Cheia)</span>
                 <span class="weather-btn-arrow">↗</span>
               </button>
@@ -275,17 +272,17 @@
           <!-- FILTROS DO GLOBO (Requisitos 8, 10) -->
           <div class="world-toolbar">
             <div class="type-toggle" role="group" aria-label="Filtrar marcadores">
-              <button class="type-toggle-btn active" data-kind="all">TODOS</button>
-              <button class="type-toggle-btn" data-kind="radio">RÁDIO</button>
-              <button class="type-toggle-btn" data-kind="camera">CÂMERAS</button>
-              <button class="type-toggle-btn" data-kind="tv">TV</button>
+              <button class="type-toggle-btn active" data-kind="all" title="Exibir todas as camadas (clique novamente para desabilitar tudo)">TODOS</button>
+              <button class="type-toggle-btn" data-kind="radio" title="Filtrar apenas rádios (clique novamente para desabilitar)">RÁDIO</button>
+              <button class="type-toggle-btn" data-kind="camera" title="Filtrar apenas câmeras ao vivo (clique novamente para desabilitar)">CÂMERAS</button>
+              <button class="type-toggle-btn" data-kind="tv" title="Filtrar apenas canais de TV (clique novamente para desabilitar)">TV</button>
             </div>
-            <div class="weather-modes-group" role="group" aria-label="Visualizações de Ventos">
-              <button class="windy-mode-btn" id="btnWindGlobe" title="Forma B: Ativar correntes de vento 3D diretamente na curvatura do Globo" aria-label="Ventos 3D no Globo">
-                <span class="mode-icon">🌐</span>
-                <span>VENTOS 3D</span>
+            <div class="weather-modes-group" role="group" aria-label="Visualizações Globais">
+              <button class="windy-mode-btn" id="btnAirports" title="Exibir localização dos aeroportos do mundo no Globo 3D (ArcGIS Dashboards)" aria-label="Aeroportos do Mundo">
+                <span class="mode-icon">✈️</span>
+                <span>AEROPORTOS</span>
               </button>
-              <button class="windy-mode-btn" id="btnWindMap" title="Forma A: Abrir mapa de ventos e radar da Windy em tela cheia" aria-label="Radar Windy Tela Cheia">
+              <button class="windy-mode-btn" id="btnWindMap" title="Abrir mapa de ventos e radar meteorológico da Windy em tela cheia" aria-label="Radar Windy Tela Cheia">
                 <span class="mode-icon">🌪️</span>
                 <span>RADAR WINDY</span>
               </button>
@@ -341,6 +338,7 @@
             <button id="zoomOut" aria-label="Afastar" title="Afastar">−</button>
             <span class="control-divider"></span>
             <button id="resetGlobe" aria-label="Reorientar globo" title="Reorientar">↺</button>
+            <button id="toggleAutoRotate" aria-label="Pausar rotação automática" title="Pausar rotação automática">⏸</button>
             <button id="locateMe" aria-label="Ir para cidade mais próxima" title="Minha localização">◎</button>
           </div>
 
@@ -349,6 +347,7 @@
             <span><i class="legend-radio"></i> RÁDIO</span>
             <span><i class="legend-cam"></i> LIVE CAM</span>
             <span><i class="legend-tv"></i> CANAL TV</span>
+            <span id="legendAirport" class="hidden"><i class="legend-airport"></i> AEROPORTOS</span>
           </div>
 
           <button class="back-to-globe hidden" id="backToGlobe">← Voltar ao globo</button>
@@ -660,10 +659,10 @@
   <div class="filter-popover hidden" id="filterPopover">
     <span class="section-eyebrow">MOSTRAR NO MAPA</span>
     <div class="filter-options">
-      <button class="type-toggle-btn active" data-kind="all">Todos</button>
-      <button class="type-toggle-btn" data-kind="radio">Rádio</button>
-      <button class="type-toggle-btn" data-kind="camera">Câmeras</button>
-      <button class="type-toggle-btn" data-kind="tv">TV</button>
+      <button class="type-toggle-btn active" data-kind="all" title="Exibir todas as camadas (clique novamente para desabilitar tudo)">Todos</button>
+      <button class="type-toggle-btn" data-kind="radio" title="Filtrar apenas rádios (clique novamente para desabilitar)">Rádio</button>
+      <button class="type-toggle-btn" data-kind="camera" title="Filtrar apenas câmeras ao vivo (clique novamente para desabilitar)">Câmeras</button>
+      <button class="type-toggle-btn" data-kind="tv" title="Filtrar apenas canais de TV (clique novamente para desabilitar)">TV</button>
     </div>
     <p>Fontes oficiais e disponibilidade ao vivo conforme cada fornecedor.</p>
   </div>

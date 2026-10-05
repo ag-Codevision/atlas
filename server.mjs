@@ -29,6 +29,11 @@ if (!process.env.WINDY_API_KEY && (process.env.WINDY_API_KEY_WEBCAMS || process.
   process.env.WINDY_API_KEY = process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams;
 }
 
+// Normalização da chave MapTiler
+if (!process.env.MAPTILER_API_KEY && (process.env.MAPTILER_KEY || process.env.MapTiler_API_Key)) {
+  process.env.MAPTILER_API_KEY = process.env.MAPTILER_KEY || process.env.MapTiler_API_Key;
+}
+
 const publicFiles = new Map(['index.html','styles.css','app.js','shared/cities.js','shared/geo.js','shared/stations-global.json','client/runtime.js','client/camera-player.js'].map(file=>['/'+file,file]));
 for (const file of ['maplibre-gl.mjs','maplibre-gl-shared.mjs','maplibre-gl-worker.mjs','maplibre-gl.css']) publicFiles.set('/vendor/'+file,'node_modules/maplibre-gl/dist/'+file);
 publicFiles.set('/vendor/globe.gl.min.js','node_modules/globe.gl/dist/globe.gl.min.js');
@@ -40,6 +45,8 @@ publicFiles.set('/data/radio-garden-places.json','data/radio-garden-places.json'
 publicFiles.set('/data/tvgarden-webcams.json','data/tvgarden-webcams.json');
 publicFiles.set('/data/tvgarden-tv.json','data/tvgarden-tv.json');
 publicFiles.set('/data/tvgarden-country-coords.json','data/tvgarden-country-coords.json');
+publicFiles.set('/shared/airports.json','shared/airports.json');
+let cachedAirports = null;
 const mime = {'.html':'text/html','.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
 const requests = new Map();
 function json(res,status,body,headers={}) {
@@ -70,12 +77,17 @@ export async function api(req,res,url) {
     const webcamsKey = process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams || process.env.WINDY_API_KEY || '';
     const mapKey = process.env.WINDY_API_KEY_MAP_FORECAST || process.env.WINDY_API_KEY_MAP || process.env.WINDY_API_KEY_Map_Forecast || process.env['WINDY_API_KEY_Map Forecast'] || '';
     const pointKey = process.env.WINDY_API_KEY_POINT_FORECAST || process.env.WINDY_API_KEY_POINT || process.env.WINDY_API_KEY_Point_Forecast || process.env['WINDY_API_KEY_Point Forecast'] || '';
+    const mapTilerKey = (process.env.MAPTILER_API_KEY || process.env.MAPTILER_KEY || process.env.MapTiler_API_Key || '').trim();
+    const mapTilerStyle = (process.env.MAPTILER_STYLE || 'hybrid-v4').trim();
     return json(res,200,{
       windyConfigured: Boolean(webcamsKey),
       windyWebcamsConfigured: Boolean(webcamsKey),
       windyPointConfigured: Boolean(pointKey),
       windyMapConfigured: Boolean(mapKey),
       windyMapKey: mapKey,
+      mapTilerKey,
+      mapTilerConfigured: Boolean(mapTilerKey),
+      mapTilerStyle,
       cameraSources,
       radioProvider:'Radio Browser',
       cameraProvider:'Windy Webcams'
@@ -291,6 +303,26 @@ export async function api(req,res,url) {
     const id=params.get('id')||''; if (!/^[a-f0-9-]{36}$/i.test(id)) return json(res,400,{error:'Estação inválida.'});
     if (path.endsWith('health')) return json(res,200,await stationHealth(id));
     await radioBrowser('/json/url/'+encodeURIComponent(id)); return json(res,200,{ok:true});
+  }
+  if (path==='/api/airports') {
+    try {
+      if (!cachedAirports) {
+        cachedAirports = JSON.parse(await readFile(resolve(ROOT, 'shared/airports.json'), 'utf8'));
+      }
+      const q = (params.get('q') || '').trim().toLowerCase();
+      if (q) {
+        const filtered = cachedAirports.filter(a =>
+          (a.iata && a.iata.toLowerCase().includes(q)) ||
+          (a.name && a.name.toLowerCase().includes(q)) ||
+          (a.city && a.city.toLowerCase().includes(q)) ||
+          (a.country && a.country.toLowerCase().includes(q))
+        );
+        return json(res, 200, { airports: filtered.slice(0, 100), count: filtered.length });
+      }
+      return json(res, 200, { airports: cachedAirports, count: cachedAirports.length });
+    } catch (err) {
+      return json(res, 500, { error: 'Falha ao carregar aeroportos: ' + err.message });
+    }
   }
   if (path==='/api/cities') return json(res,200,{cities});
   if (path==='/api/camera') {

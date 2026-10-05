@@ -23,7 +23,9 @@ const state = {
   weather: null,
   weatherLoading: false,
   weatherRequestId: 0,
-  windGlobeActive: false,
+  airports: [],
+  airportsVisible: false,
+  activeAirport: null,
   windyMapOpen: false,
   windyMapLayer: "wind",
   windyDetailOpen: true,
@@ -93,7 +95,10 @@ const state = {
     loading: false,
     initialized: false,
     searchTimer: null
-  }
+  },
+  mapTilerKey: (typeof localStorage !== "undefined" ? localStorage.getItem("MAPTILER_API_KEY") : "") || "",
+  mapTilerStyle: "hybrid-v4",
+  autoRotatePaused: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -432,7 +437,6 @@ function selectCity(id, options = {}) {
   loadTvChannels();
   loadWeather();
   if (state.windyMapOpen) updateWindyMap();
-  if (state.windGlobeActive) updateWindGlobe();
 }
 
 // INTEGRAÇÃO WINDY POINT FORECAST (PREVISÃO METEOROLÓGICA)
@@ -447,7 +451,6 @@ async function loadWeather() {
     if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
     state.weather = data;
     renderWeather();
-    if (state.windGlobeActive) updateWindGlobe();
   } catch (err) {
     if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
     state.weather = null;
@@ -517,117 +520,80 @@ function toggleWeatherCard(force) {
   }
 }
 
-// FORMA B: VETORES E CORRENTES DE VENTO 3D DIRETAMENTE NO GLOBO
-function generateGlobalWindArcs() {
-  const arcs = [];
-
-  // 1. CINTURÕES GLOBAIS DE CIRCULAÇÃO ATMOSFÉRICA
-  // Alísios (Trade Winds), Ventos do Oeste (Westerlies), Correntes Polares e Jet Streams
-  const latBands = [
-    // Alísios Tropicais Norte (Leste -> Oeste convergindo para zona equatorial)
-    { startLat: 18, endLat: 6, stepLng: 24, spanLng: -24, color: ['rgba(0, 229, 255, 0.75)', 'rgba(0, 176, 255, 0.2)'], alt: 0.035, speed: 2800 },
-    // Alísios Tropicais Sul (Leste -> Oeste convergindo para zona equatorial)
-    { startLat: -18, endLat: -6, stepLng: 24, spanLng: -24, color: ['rgba(0, 229, 255, 0.75)', 'rgba(0, 176, 255, 0.2)'], alt: 0.035, speed: 2800 },
-    // Ventos do Oeste Temperados Norte (Oeste -> Leste)
-    { startLat: 36, endLat: 52, stepLng: 22, spanLng: 30, color: ['rgba(77, 208, 225, 0.8)', 'rgba(100, 255, 218, 0.25)'], alt: 0.045, speed: 2200 },
-    // Ventos do Oeste Temperados Sul (Oeste -> Leste - "Rugientes 40")
-    { startLat: -36, endLat: -52, stepLng: 22, spanLng: 30, color: ['rgba(77, 208, 225, 0.8)', 'rgba(100, 255, 218, 0.25)'], alt: 0.045, speed: 2200 },
-    // Jet Stream Polar Norte em Alta Altitude
-    { startLat: 48, endLat: 56, stepLng: 30, spanLng: 40, color: ['rgba(128, 222, 234, 0.9)', 'rgba(0, 230, 118, 0.3)'], alt: 0.065, speed: 1700 },
-    // Jet Stream Polar Sul em Alta Altitude
-    { startLat: -48, endLat: -56, stepLng: 30, spanLng: 40, color: ['rgba(128, 222, 234, 0.9)', 'rgba(0, 230, 118, 0.3)'], alt: 0.065, speed: 1700 },
-    // Ventos Polares Norte (Leste -> Oeste)
-    { startLat: 70, endLat: 64, stepLng: 36, spanLng: -32, color: ['rgba(178, 235, 242, 0.65)', 'rgba(255, 255, 255, 0.15)'], alt: 0.035, speed: 3300 },
-    // Ventos Polares Sul (Leste -> Oeste)
-    { startLat: -70, endLat: -64, stepLng: 36, spanLng: -32, color: ['rgba(178, 235, 242, 0.65)', 'rgba(255, 255, 255, 0.15)'], alt: 0.035, speed: 3300 }
-  ];
-
-  latBands.forEach((band) => {
-    for (let lng = -180; lng < 180; lng += band.stepLng) {
-      const offsetLat = Math.sin(lng * 0.05) * 3;
-      const sLat = Math.max(-85, Math.min(85, band.startLat + offsetLat));
-      const eLat = Math.max(-85, Math.min(85, band.endLat + offsetLat));
-      let eLng = lng + band.spanLng;
-      if (eLng > 180) eLng -= 360;
-      if (eLng < -180) eLng += 360;
-
-      arcs.push({
-        startLat: sLat,
-        startLng: lng,
-        endLat: eLat,
-        endLng: eLng,
-        color: band.color,
-        alt: band.alt,
-        stroke: 0.9,
-        dashLength: 0.38,
-        dashGap: 0.15,
-        animateTime: band.speed + Math.floor((lng + 180) * 2)
-      });
+// CAMADA OFICIAL DE AEROPORTOS DO MUNDO (ARCGIS WORLD AIRPORTS)
+async function loadAirports() {
+  if (state.airports && state.airports.length > 0) return state.airports;
+  try {
+    const res = await request('/api/airports');
+    if (res && Array.isArray(res.airports)) {
+      state.airports = res.airports;
+      return state.airports;
     }
-  });
-
-  // 2. CORRENTES REGIONAIS FOCADAS NA CIDADE ATUAL
-  const city = state.city;
-  if (city && city.lat != null && city.lon != null) {
-    const windSpeed = state.weather?.windSpeed || 15;
-    const animTime = Math.max(1200, Math.min(3200, Math.round(3600 - windSpeed * 40)));
-    const directions = [0, 45, 90, 135, 180, 225, 270, 315];
-    directions.forEach((deg, idx) => {
-      const rad = (deg * Math.PI) / 180;
-      const dist = 4.5 + (idx % 3) * 2.2;
-      const sLat = city.lat - Math.sin(rad) * dist;
-      const sLon = city.lon - Math.cos(rad) * dist;
-      const eLat = city.lat + Math.sin(rad) * (dist * 1.3);
-      const eLon = city.lon + Math.cos(rad) * (dist * 1.3);
-
-      arcs.push({
-        startLat: sLat,
-        startLng: sLon,
-        endLat: eLat,
-        endLng: eLon,
-        color: ['rgba(255, 213, 79, 0.95)', 'rgba(0, 229, 255, 0.35)'],
-        alt: 0.052 + (idx % 2) * 0.018,
-        stroke: 1.3,
-        dashLength: 0.46,
-        dashGap: 0.14,
-        animateTime: animTime
-      });
-    });
+  } catch (err) {
+    console.warn("Falha ao carregar aeroportos mundiais:", err);
   }
-
-  return arcs;
+  return [];
 }
 
-function toggleWindGlobe(force) {
-  const shouldActive = force !== undefined ? force : !state.windGlobeActive;
-  state.windGlobeActive = shouldActive;
+async function toggleAirports(force) {
+  const shouldShow = force !== undefined ? force : !state.airportsVisible;
+  state.airportsVisible = shouldShow;
+  const btn = $("btnAirports");
+  const legend = $("legendAirport");
+  btn?.classList.toggle("active", shouldShow);
+  legend?.classList.toggle("hidden", !shouldShow);
 
-  const btnTop = $("btnWindGlobe");
-  const btnWeather = $("weatherOpenGlobeBtn");
-  btnTop?.classList.toggle("active", shouldActive);
-  btnWeather?.classList.toggle("active", shouldActive);
+  if (shouldShow && (!state.airports || state.airports.length === 0)) {
+    showToast("✈️ Carregando aeroportos mundiais (ArcGIS)...");
+    await loadAirports();
+  }
 
-  if (shouldActive) {
-    // Fecha a Forma A se estiver aberta para visualização imersiva do globo 3D
-    if (state.windyMapOpen) toggleWindyMap(false);
-    if (state.view !== "globe") setView("globe");
-    updateWindGlobe();
-    showToast("🌬️ Forma B ativada: Correntes de vento 3D no Globo");
+  updateGlobePoints(true);
+  if (shouldShow) {
+    showToast(`✈️ Aeroportos do mundo ativados (${state.airports.length || 9943} aeroportos)`);
   } else {
-    if (state.globe && typeof state.globe.arcsData === "function") {
-      state.globe.arcsData([]);
-    }
+    showToast("✈️ Camada de aeroportos desativada");
   }
 }
 
-function updateWindGlobe() {
-  if (!state.windGlobeActive || !state.globe) return;
-  if (typeof state.globe.arcsData !== "function") return;
-  const arcs = generateGlobalWindArcs();
-  state.globe.arcsData(arcs);
+function findClosestAirport(lat, lon, maxDistKm = 140) {
+  if (!state.airports || state.airports.length === 0) return null;
+  let best = null, bestDist = maxDistKm;
+  for (const apt of state.airports) {
+    const d = distanceKm(lat, lon, apt.lat, apt.lon);
+    if (d < bestDist) {
+      bestDist = d;
+      best = apt;
+    }
+  }
+  return best;
 }
 
-// FORMA A: INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
+function selectAirport(apt) {
+  if (!apt) return;
+  state.activeAirport = apt;
+  const aLat = apt.lat;
+  const aLng = apt.lon;
+  state.globe.pointOfView({ lat: aLat, lng: aLng, altitude: 0.85 }, 1200);
+
+  updateReticleTheme("airport");
+  const reticle = $("tuningReticle");
+  const reticleLabel = $("reticleLabel");
+  if (reticle) {
+    reticle.classList.remove("searching");
+    reticle.classList.add("locked");
+  }
+  const iataBadge = apt.iata ? `[${apt.iata}] ` : '';
+  const loc = [apt.city, apt.country].filter(Boolean).join(", ");
+  if (reticleLabel) {
+    reticleLabel.textContent = `✈️ ${iataBadge}${apt.name} · ${loc}`;
+  }
+  updateGlobePoints(true);
+  const elevInfo = apt.elev != null ? ` · Elev: ${apt.elev} ft` : '';
+  showToast(`✈️ ${iataBadge}${apt.name} — ${loc}${elevInfo}`);
+}
+
+// INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
 function toggleWindyMap(force, layer) {
   const panel = $("windyMapPanel");
   const btn = $("toggleWindyMap");
@@ -646,8 +612,6 @@ function toggleWindyMap(force, layer) {
   btnWeather?.classList.toggle("active", shouldOpen);
 
   if (shouldOpen) {
-    // Se a Forma B estiver ativa, desliga para foco total na Forma A
-    if (state.windGlobeActive) toggleWindGlobe(false);
     $("mapPanel")?.classList.add("hidden");
     $("cameraPanel")?.classList.add("hidden");
     $("stationDrawer")?.classList.add("hidden");
@@ -855,7 +819,7 @@ async function loadGlobalTvPoints() {
 function updateReticleTheme(kind) {
   const reticle = $("tuningReticle");
   if (!reticle) return;
-  reticle.classList.remove("mode-radio", "mode-camera", "mode-tv", "mode-all");
+  reticle.classList.remove("mode-radio", "mode-camera", "mode-tv", "mode-all", "mode-none");
   const target = kind || state.kind || "all";
   reticle.classList.add(`mode-${target}`);
 }
@@ -1771,6 +1735,40 @@ function getSubsolarPoint(date = new Date()) {
   return { lat: declination, lng: sunLng };
 }
 
+// ILUMINAÇÃO DINÂMICA INTELIGENTE CONFORME O ZOOM (CLAREIA REGIÕES NOTURNAS EM ZOOM APROXIMADO)
+function updateZoomIllumination() {
+  if (!state.globe) return;
+  const scene = state.globe.scene?.();
+  if (!scene) return;
+  const ambLight = scene.children.find((c) => c.type === "AmbientLight" || c.isAmbientLight);
+  const dirLight = scene.children.find((c) => c.type === "DirectionalLight" || c.isDirectionalLight);
+  if (!ambLight) return;
+
+  const pov = state.globe.pointOfView?.();
+  const alt = pov && typeof pov.altitude === "number" ? pov.altitude : 1.6;
+
+  // Limiares de zoom:
+  // alt >= 1.45: visão orbital cósmica com ciclo dia/noite espacial realista
+  // alt <= 0.85: aproximação de cidade/região -> 100% claro e diurno para visualização dos detalhes do mapa
+  const zoomFactor = Math.max(0, Math.min(1, (1.45 - alt) / (1.45 - 0.70)));
+
+  // Luz ambiente: de 0.88 (espaço) até 3.25 (zoom detalhado nítido e iluminado)
+  const baseIntensity = 0.88;
+  const targetIntensity = 3.25;
+  ambLight.intensity = baseIntensity + (targetIntensity - baseIntensity) * zoomFactor;
+
+  // Interpola a cor de azul-escuro espacial (0x5a6e88) para branco puro solar (0xffffff)
+  const r = (90 + (255 - 90) * zoomFactor) / 255;
+  const g = (110 + (255 - 110) * zoomFactor) / 255;
+  const b = (136 + (255 - 136) * zoomFactor) / 255;
+  ambLight.color.setRGB(r, g, b);
+
+  if (dirLight) {
+    // Atenua sombras excessivamente duras em zoom aproximado
+    dirLight.intensity = 3.6 - (1.4 * zoomFactor);
+  }
+}
+
 // 23. ILUMINAÇÃO SOLAR E CICLO DIA / NOITE NO GLOBO 3D
 function setupSolarIllumination() {
   if (!state.globe) return;
@@ -1781,11 +1779,6 @@ function setupSolarIllumination() {
     const ambLight = scene.children.find((c) => c.type === "AmbientLight" || c.isAmbientLight);
     const dirLight = scene.children.find((c) => c.type === "DirectionalLight" || c.isDirectionalLight);
 
-    if (ambLight) {
-      ambLight.intensity = 0.88;
-      ambLight.color.setHex(0x5a6e88);
-    }
-
     if (dirLight) {
       const sun = getSubsolarPoint(new Date());
       const coords = state.globe.getCoords(sun.lat, sun.lng, 2.5);
@@ -1795,6 +1788,8 @@ function setupSolarIllumination() {
         dirLight.color.setHex(0xfffaed);
       }
     }
+
+    updateZoomIllumination();
   };
 
   updateLights();
@@ -1892,14 +1887,31 @@ function renderGlobePointsDirect() {
     }
   }
 
-  // Atualiza as partículas 2D planas com todos os pontos
-  if (typeof state.globe.particlesData === "function") {
-    state.globe.particlesData(particleGroups);
+  // AEROPORTOS DO MUNDO (Pontos Azul-Céu / Ciano #38bdf8 — 9.943 aeroportos globais do ArcGIS)
+  if (state.airportsVisible && state.airports && state.airports.length > 0) {
+    particleGroups.push({
+      id: "airports",
+      color: "#38bdf8",
+      size: 2.8,
+      points: state.airports
+    });
   }
 
-  // 2. PONTO ATIVO SELECIONADO (Destaque Dourado #ffd54f com Tooltip e Animação)
+  // 2. PONTO ATIVO SELECIONADO (Marcador 2D com tamanho fixo em tela - sempre pequenininho e nunca escala no zoom)
   const activePoints = [];
-  if (state.kind === "camera" && state.camera && !state.camera.isTv) {
+  if (state.kind === "none" && !state.activeAirport) {
+    // Camadas desabilitadas: mantém globo 100% limpo sem marcadores
+  } else if (state.activeAirport) {
+    const apt = state.activeAirport;
+    activePoints.push({
+      lat: apt.lat,
+      lng: apt.lon,
+      color: "#38bdf8",
+      label: `✈️ ${apt.name} (${apt.iata || apt.id})`,
+      kind: "airport",
+      payload: apt
+    });
+  } else if (state.kind === "camera" && state.camera && !state.camera.isTv) {
     const c = state.camera;
     const lat = c.lat != null ? c.lat : c.latitude;
     const lon = c.lon != null ? c.lon : c.longitude;
@@ -1907,8 +1919,6 @@ function renderGlobePointsDirect() {
       activePoints.push({
         lat,
         lng: lon,
-        size: 0.65,
-        alt: 0.02,
         color: "#ffd54f",
         label: c.name,
         kind: "camera",
@@ -1923,8 +1933,6 @@ function renderGlobePointsDirect() {
       activePoints.push({
         lat,
         lng: lon,
-        size: 0.68,
-        alt: 0.02,
         color: "#ffd54f",
         label: c.name,
         kind: "tv",
@@ -1936,8 +1944,6 @@ function renderGlobePointsDirect() {
     activePoints.push({
       lat: p.lat,
       lng: p.lon,
-      size: 0.70,
-      alt: 0.02,
       color: "#ffd54f",
       label: p.title,
       kind: "radioGardenPlace",
@@ -1947,8 +1953,6 @@ function renderGlobePointsDirect() {
     activePoints.push({
       lat: state.city.lat,
       lng: state.city.lon,
-      size: 0.65,
-      alt: 0.02,
       color: "#ffd54f",
       label: `${state.city.name} · ${state.city.country}`,
       kind: "city",
@@ -1956,7 +1960,31 @@ function renderGlobePointsDirect() {
     });
   }
 
-  state.globe.pointsData(activePoints);
+  // Inclui o ponto ativo com destaque dourado radiante nas partículas 2D (tamanho fixo em tela: 4.6px)
+  if (activePoints.length > 0) {
+    particleGroups.push({
+      id: "activeSelection",
+      color: "#ffd54f",
+      size: 4.6,
+      points: activePoints.map((p) => ({ lat: p.lat, lon: p.lng }))
+    });
+  }
+
+  // Atualiza as partículas 2D planas com todos os pontos e a seleção ativa
+  if (typeof state.globe.particlesData === "function") {
+    state.globe.particlesData(particleGroups);
+  }
+
+  // Atualiza o marcador HTML 2D de alta nitidez (fixo em tela, sempre pequenininho, nunca escala com o zoom)
+  if (typeof state.globe.htmlElementsData === "function") {
+    state.globe.htmlElementsData(activePoints);
+  }
+
+  // Desativa polígonos/prismas 3D volumétricos (evita polígono amarelo gigante no zoom)
+  if (typeof state.globe.pointsData === "function") {
+    state.globe.pointsData([]);
+  }
+
   requestAnimationFrame(ensurePointsAlwaysVisible);
 }
 
@@ -1966,6 +1994,67 @@ function ensurePointsAlwaysVisible() {
 }
 
 let globeRotateResumeTimer = null;
+
+// APLICAÇÃO DO MAPA DE SATÉLITE HÍBRIDO (MAPTILER HYBRID-V4) NO GLOBO 3D
+function applyMapTilerGlobe(apiKey, style = "hybrid-v4") {
+  if (!state.globe) return;
+  const key = (apiKey || state.mapTilerKey || "").trim();
+  if (!key) return;
+
+  state.mapTilerKey = key;
+  state.mapTilerStyle = style || "hybrid-v4";
+
+  try {
+    // Configura o motor de tiles dinâmicos do MapTiler Hybrid-v4 (com zoom interativo)
+    // Conforme a câmera se aproxima ou se afasta, o Three-Globe carrega tiles de maior resolução progressivamente
+    state.globe
+      .globeTileEngineUrl((x, y, l) => `https://api.maptiler.com/maps/${state.mapTilerStyle}/${l}/${x}/${y}.jpg?key=${key}`)
+      .globeTileEngineMaxLevel(17);
+
+    const attr = $("mapAttribution");
+    if (attr) {
+      attr.textContent = "© MapTiler · © OpenStreetMap contributors · OpenFreeMap · MapLibre";
+    }
+
+    console.info(`[MapTiler] Mapa ${state.mapTilerStyle} ativado com sucesso no Globo 3D.`);
+  } catch (err) {
+    console.warn("[MapTiler] Não foi possível ativar globeTileEngineUrl:", err);
+  }
+}
+
+// SINCRONIZAÇÃO VISUAL DO BOTÃO DE PAUSA/PLAY COM O ESTADO REAL DO GLOBO
+function syncAutoRotateUI() {
+  const btn = $("toggleAutoRotate");
+  if (!btn) return;
+  const isPaused = Boolean(state.autoRotatePaused);
+  btn.classList.toggle("is-paused", isPaused);
+  btn.innerHTML = isPaused ? "▶" : "⏸";
+  btn.title = isPaused ? "Retomar rotação automática" : "Pausar rotação automática";
+  btn.setAttribute("aria-label", btn.title);
+}
+
+// CONTROLE DE PAUSA E RETOMADA DA ROTAÇÃO AUTOMÁTICA DO GLOBO
+function toggleAutoRotate(forceState) {
+  const willPause = forceState !== undefined ? Boolean(forceState) : !state.autoRotatePaused;
+  state.autoRotatePaused = willPause;
+
+  const controls = state.globe?.controls?.();
+  if (controls) {
+    controls.autoRotate = !willPause;
+  }
+
+  syncAutoRotateUI();
+
+  if (willPause) {
+    clearTimeout(globeRotateResumeTimer);
+    document.body.classList.remove("is-orbiting");
+    showToast("Rotação automática pausada");
+  } else {
+    state.lastUserInteractionTime = performance.now();
+    document.body.classList.add("is-orbiting");
+    showToast("Rotação automática retomada");
+  }
+}
 
 async function initGlobe() {
   if (state.globe) return;
@@ -2010,80 +2099,36 @@ async function initGlobe() {
       .particlesSize((d) => d.size || 2.4)
       .particlesSizeAttenuation(false) // Pontos 2D nítidos de tamanho constante em tela (não volumétricos)
       .particlesColor((d) => d.color || "#ffffff")
-      // Ponto ativo com destaque dourado radiante
-      .pointsData([])
-      .pointLat("lat")
-      .pointLng("lng")
-      .pointColor("color")
-      .pointRadius("size")
-      .pointAltitude("alt")
-      .pointResolution(4)
-      .pointLabel(
-        (point) => {
-          if (point.kind === "tv" || point.kind === "tvGardenTvCountry") {
-            const flag = COUNTRY_FLAGS[point.payload.countryCode || point.payload.code] || "📺";
-            const location = [point.payload.city, point.payload.country].filter(Boolean).join(" · ");
-            const isCurrent = state.camera?.id === point.payload.id && state.camera?.isTv;
-            return `<div style="padding:8px 12px;background:#180a12;border:1px solid rgba(255,51,102,0.6);border-radius:10px;font:11px DM Sans,sans-serif;color:#f4f2f6;box-shadow:0 8px 24px rgba(0,0,0,0.85);pointer-events:none;">
-              <strong style="display:block;font-size:12.5px;color:#fff">${flag} ${escapeHtml(point.payload.name || point.label)}</strong>
-              <div style="margin-top:3px;font-size:9.5px;color:${isCurrent ? '#ffd54f' : '#ff3366'};font-weight:700;letter-spacing:0.1em">
-                ${isCurrent ? '▶ TRANSMITINDO AGORA' : '📺 CANAL DE TV AO VIVO'}
-              </div>
-              <div style="margin-top:2px;font-size:9px;color:#9aa0a6">${escapeHtml(location || 'Ao Vivo')} · Clique para assistir</div>
-            </div>`;
-          }
-          if (point.kind === "camera" || point.kind === "tvGardenCountry") {
-            const flag = COUNTRY_FLAGS[point.payload.countryCode || point.payload.code] || "📹";
-            const location = [point.payload.city, point.payload.country].filter(Boolean).join(" · ");
-            const isCurrent = state.camera?.id === point.payload.id && !state.camera?.isTv;
-            return `<div style="padding:8px 12px;background:#081422;border:1px solid rgba(0,176,255,0.5);border-radius:10px;font:11px DM Sans,sans-serif;color:#f4f2f6;box-shadow:0 8px 24px rgba(0,0,0,0.8);pointer-events:none;">
-              <strong style="display:block;font-size:12.5px;color:#fff">${flag} ${escapeHtml(point.payload.name || point.label)}</strong>
-              <div style="margin-top:3px;font-size:9.5px;color:${isCurrent ? '#ffd54f' : '#00b0ff'};font-weight:700;letter-spacing:0.1em">
-                ${isCurrent ? '▶ AO VIVO AGORA' : '📹 CÂMERA AO VIVO'}
-              </div>
-              <div style="margin-top:2px;font-size:9px;color:#9aa0a6">${escapeHtml(location || 'Ao Vivo')} · Clique para assistir</div>
-            </div>`;
-          }
-          if (point.kind === "radioGardenPlace") {
-            const isCurrent = state.currentRadioGardenPlace?.id === point.payload.id;
-            return `<div style="padding:8px 12px;background:#0d121c;border:1px solid ${isCurrent ? '#ffd54f' : 'rgba(0,230,118,0.3)'};border-radius:10px;font:11px DM Sans,sans-serif;color:#f4f2f6;box-shadow:0 8px 24px rgba(0,0,0,0.8);pointer-events:none;">
-              <strong style="display:block;font-size:12.5px;color:#fff">${escapeHtml(point.payload.title)}</strong>
-              <div style="margin-top:3px;font-size:9.5px;color:${isCurrent ? '#ffd54f' : '#00e676'};font-weight:700;letter-spacing:0.1em">
-                ${isCurrent ? '▶ SINTONIZADO AGORA' : `RADIO GARDEN · ${escapeHtml((point.payload.country || '').toUpperCase())}`}
-              </div>
-              <div style="margin-top:2px;font-size:9px;color:#9aa0a6">${point.payload.size || 1} frequências disponíveis</div>
-            </div>`;
-          }
-          const isPlaying = point.kind === "station" && state.station?.id === point.payload?.id;
-          const badgeColor = isPlaying ? "#ffd54f" : "#ffffff";
-          return `<div style="padding:8px 12px;background:#11131c;border:1px solid rgba(255,255,255,0.16);border-radius:10px;font:11px DM Sans,sans-serif;color:#f4f2f6;box-shadow:0 8px 24px rgba(0,0,0,0.7);pointer-events:none;">
-            <strong style="display:block;font-size:12.5px;color:#fff">${escapeHtml(point.label)}</strong>
-            <div style="margin-top:3px;font-size:9px;color:${badgeColor};font-weight:700;letter-spacing:0.1em">
-              DESTINO
-            </div>
-          </div>`;
-        }
-      )
-      .onPointClick((point) => {
-        if (point.kind === "tv" || point.kind === "tvGardenTvCountry") {
-          state.globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.95 }, 1200);
-          tuneToTv(point.payload, false);
-          openTvChannel(point.payload);
-        } else if (point.kind === "camera" || point.kind === "tvGardenCountry") {
-          state.globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.95 }, 1200);
-          tuneToWebcam(point.payload, true);
-        } else if (point.kind === "radioGardenPlace") {
-          state.globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.95 }, 1200);
-          tuneToRadioGardenPlace(point.payload, true);
-          showToast(`📻 Sintonizando ${point.payload.title}, ${point.payload.country}`);
-        } else if (point.kind === "city") {
-          selectCity(point.payload);
-        } else if (point.kind === "station") {
-          playStation(point.payload);
-        }
+      // Marcador de seleção ativo 2D (Tamanho fixo em tela, sempre pequenininho, nunca escala com o zoom)
+      .htmlElementsData([])
+      .htmlLat("lat")
+      .htmlLng("lng")
+      .htmlAltitude(0.002)
+      .htmlElement((point) => {
+        const marker = document.createElement("div");
+        marker.className = "globe-active-marker";
+        marker.title = point.label || "";
+        marker.innerHTML = `
+          <span class="globe-marker-ping"></span>
+          <span class="globe-marker-dot"></span>
+        `;
+        return marker;
       })
+      // Desativa malha 3D volumétrica (evita que polígonos gigantes cubram o mapa ao aproximar a câmera)
+      .pointsData([])
+      .pointRadius(0)
+      .pointAltitude(0)
+      .pointResolution(8)
       .onGlobeClick(({ lat, lng }) => {
         if (lat == null || lng == null) return;
+        if (state.airportsVisible) {
+          const apt = findClosestAirport(lat, lng, 120);
+          if (apt) {
+            selectAirport(apt);
+            return;
+          }
+        }
+        if (state.kind === "none") return;
         if (state.kind === "camera") {
           const cam = findClosestWebcam(lat, lng, 450);
           if (cam) {
@@ -2168,7 +2213,10 @@ async function initGlobe() {
         globeRotateResumeTimer = setTimeout(() => {
           if (state.view === "globe" && !state.isDraggingGlobe) {
             const c = state.globe?.controls();
-            if (c) c.autoRotate = true;
+            if (c) {
+              c.autoRotate = !state.autoRotatePaused;
+              syncAutoRotateUI();
+            }
           }
         }, duration + 100);
       }
@@ -2181,13 +2229,19 @@ async function initGlobe() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.10;
     controls.rotateSpeed = 0.9;
-    controls.zoomSpeed = 0.9;
+    controls.zoomSpeed = 1.0;
+
+    // Se a chave MapTiler estiver configurada, aplica o mapa de satélite híbrido interativo com zoom
+    if (state.mapTilerKey) {
+      applyMapTilerGlobe(state.mapTilerKey, state.mapTilerStyle);
+    }
 
     // Retícula e Sintonia ao Arrasto com feedback visual temático
     const reticle = $("tuningReticle");
     const reticleLabel = $("reticleLabel");
 
     const getSearchingMessage = () => {
+      if (state.kind === "none") return "CAMADAS DESATIVADAS";
       if (state.kind === "camera") return "BUSCANDO CÂMERAS...";
       if (state.kind === "tv") return "SINTONIZANDO TV...";
       return "SINTONIZANDO RÁDIO...";
@@ -2197,8 +2251,13 @@ async function initGlobe() {
       state.isDraggingGlobe = false;
       state.lastUserInteractionTime = performance.now();
       clearTimeout(globeRotateResumeTimer);
+      if (state.autoRotatePaused) {
+        controls.autoRotate = false;
+        document.body.classList.remove("is-orbiting");
+        return;
+      }
       globeRotateResumeTimer = setTimeout(() => {
-        if (state.view === "globe" && !state.isDraggingGlobe && !state.camera && !document.body.classList.contains("drawer-open")) {
+        if (state.view === "globe" && !state.isDraggingGlobe && !state.camera && !document.body.classList.contains("drawer-open") && !state.autoRotatePaused) {
           controls.autoRotate = true;
           if (reticleLabel) reticleLabel.textContent = "GIRANDO O PLANETA";
           if (reticle) reticle.classList.remove("searching", "locked");
@@ -2225,6 +2284,7 @@ async function initGlobe() {
 
     controls.addEventListener("change", () => {
       state.lastUserInteractionTime = performance.now();
+      updateZoomIllumination();
       if (state.isDraggingGlobe && reticleLabel) {
         const msg = getSearchingMessage();
         if (reticleLabel.textContent !== msg) reticleLabel.textContent = msg;
@@ -2237,9 +2297,17 @@ async function initGlobe() {
       // Trava no destino mais próximo do centro da mira conforme a escolha atual
       const pov = state.globe.pointOfView();
       if (pov) {
+        if (state.kind === "none") {
+          if (reticleLabel) reticleLabel.textContent = "GIRANDO O PLANETA";
+          reticle?.classList.remove("searching", "locked");
+          return;
+        }
         if (state.kind === "camera") {
           const closestCam = findClosestWebcam(pov.lat, pov.lng, 600);
           if (closestCam) {
+            const cLat = closestCam.lat != null ? closestCam.lat : closestCam.latitude;
+            const cLng = closestCam.lon != null ? closestCam.lon : closestCam.longitude;
+            state.globe.pointOfView({ lat: cLat, lng: cLng, altitude: pov.altitude }, 600);
             tuneToWebcam(closestCam, true);
             showToast(`📹 Câmera conectada: ${closestCam.name}`);
           } else if (reticleLabel) {
@@ -2249,6 +2317,9 @@ async function initGlobe() {
         } else if (state.kind === "tv") {
           const closestTv = findClosestTv(pov.lat, pov.lng, 600);
           if (closestTv) {
+            const tLat = closestTv.lat != null ? closestTv.lat : closestTv.latitude;
+            const tLng = closestTv.lon != null ? closestTv.lon : closestTv.longitude;
+            state.globe.pointOfView({ lat: tLat, lng: tLng, altitude: pov.altitude }, 600);
             tuneToTv(closestTv, false);
             showToast(`📺 Canal de TV: ${closestTv.name}`);
           } else if (reticleLabel) {
@@ -2258,6 +2329,7 @@ async function initGlobe() {
         } else if (state.kind === "radio") {
           const closestPlace = findClosestRadioGardenPlace(pov.lat, pov.lng, 380);
           if (closestPlace) {
+            state.globe.pointOfView({ lat: closestPlace.lat, lng: closestPlace.lon, altitude: pov.altitude }, 600);
             tuneToRadioGardenPlace(closestPlace, !audio.paused && state.station != null);
             showToast(`📻 Sintonizado em ${closestPlace.title}, ${closestPlace.country}`);
           } else if (reticleLabel) {
@@ -2269,11 +2341,13 @@ async function initGlobe() {
           // Para abrir câmeras e TV neste modo, o usuário clica diretamente no ponto colorido no globo.
           const closestPlace = findClosestRadioGardenPlace(pov.lat, pov.lng, 450);
           if (closestPlace) {
+            state.globe.pointOfView({ lat: closestPlace.lat, lng: closestPlace.lon, altitude: pov.altitude }, 600);
             tuneToRadioGardenPlace(closestPlace, !audio.paused && state.station != null);
             showToast(`📻 Sintonizado em ${closestPlace.title}, ${closestPlace.country}`);
           } else {
             const nearestCity = [...cities].sort((a, b) => distanceKm(pov.lat, pov.lng, a.lat, a.lon) - distanceKm(pov.lat, pov.lng, b.lat, b.lon))[0];
             if (nearestCity && distanceKm(pov.lat, pov.lng, nearestCity.lat, nearestCity.lon) < 600) {
+              state.globe.pointOfView({ lat: nearestCity.lat, lng: nearestCity.lon, altitude: pov.altitude }, 600);
               selectCity(nearestCity);
             } else if (reticleLabel) {
               reticleLabel.textContent = "GIRANDO O PLANETA";
@@ -2323,9 +2397,13 @@ function initializeMap() {
   }
 
   try {
+    const mapStyle = state.mapTilerKey
+      ? `https://api.maptiler.com/maps/${state.mapTilerStyle || 'hybrid-v4'}/style.json?key=${state.mapTilerKey}`
+      : "https://tiles.openfreemap.org/styles/dark";
+
     state.map = new window.maplibregl.Map({
       container: host,
-      style: "https://tiles.openfreemap.org/styles/dark",
+      style: mapStyle,
       center: [state.city.lon, state.city.lat],
       zoom: 10,
       attributionControl: true,
@@ -2364,6 +2442,8 @@ function renderMapMarkers() {
   if (!state.map || !state.map.loaded()) return;
   state.mapMarkers.forEach((m) => m.remove());
   state.mapMarkers = [];
+
+  if (state.kind === "none") return;
 
   const bounds = state.map.getBounds();
   const inMapBounds = (lat, lon) => {
@@ -2483,13 +2563,16 @@ function setView(view) {
 }
 
 function setKind(kind) {
-  state.kind = kind;
+  // Se clicar no tipo que já está ativo, alterna para "none" (desabilita todas as camadas/marcadores)
+  const targetKind = state.kind === kind ? "none" : kind;
+  state.kind = targetKind;
+
   document.querySelectorAll("[data-kind]").forEach((btn) =>
-    btn.classList.toggle("active", btn.dataset.kind === kind)
+    btn.classList.toggle("active", btn.dataset.kind === targetKind)
   );
 
   // Sincroniza tema visual do retículo/alvo central
-  updateReticleTheme(kind);
+  updateReticleTheme(targetKind);
 
   const reticle = $("tuningReticle");
   const reticleLabel = $("reticleLabel");
@@ -2499,7 +2582,9 @@ function setKind(kind) {
   }
 
   if (reticleLabel) {
-    if (kind === "camera") {
+    if (targetKind === "none") {
+      reticleLabel.textContent = "CAMADAS DESATIVADAS";
+    } else if (targetKind === "camera") {
       if (state.camera && !state.camera.isTv) {
         reticleLabel.textContent = `${state.camera.name} (${state.camera.country || 'Ao Vivo'})`;
       } else {
@@ -2510,7 +2595,7 @@ function setKind(kind) {
           reticleLabel.textContent = `BUSCANDO CÂMERAS EM ${state.city.name.toUpperCase()}...`;
         }
       }
-    } else if (kind === "tv") {
+    } else if (targetKind === "tv") {
       if (state.camera && state.camera.isTv) {
         reticleLabel.textContent = `${state.camera.name} (${state.camera.country || 'TV'})`;
       } else {
@@ -2521,7 +2606,7 @@ function setKind(kind) {
           reticleLabel.textContent = `SINTONIZANDO TV EM ${state.city.name.toUpperCase()}...`;
         }
       }
-    } else if (kind === "radio") {
+    } else if (targetKind === "radio") {
       if (state.station) {
         reticleLabel.textContent = `${state.station.name} (${state.city.name})`;
       } else if (state.currentRadioGardenPlace) {
@@ -2532,6 +2617,19 @@ function setKind(kind) {
     } else {
       reticleLabel.textContent = `${state.city.name}, ${state.city.country || ''}`.trim();
     }
+  }
+
+  // Feedback imediato e claro ao usuário via toast
+  if (targetKind === "none") {
+    showToast("Todas as camadas foram desativadas");
+  } else if (targetKind === "all") {
+    showToast("Exibindo todas as camadas (Rádio, Câmeras e TV)");
+  } else if (targetKind === "radio") {
+    showToast("Filtrando: Apenas Rádios");
+  } else if (targetKind === "camera") {
+    showToast("Filtrando: Apenas Câmeras ao Vivo");
+  } else if (targetKind === "tv") {
+    showToast("Filtrando: Apenas Canais de TV");
   }
 
   updateGlobePoints();
@@ -3931,14 +4029,10 @@ function setupEvents() {
   $("localAtmosphere")?.addEventListener("click", () => toggleWeatherCard());
   $("closeWeatherCard")?.addEventListener("click", () => toggleWeatherCard(false));
 
-  // Forma B: Ventos 3D diretamente na curvatura do Globo
-  $("btnWindGlobe")?.addEventListener("click", () => toggleWindGlobe());
-  $("weatherOpenGlobeBtn")?.addEventListener("click", () => {
-    toggleWeatherCard(false);
-    toggleWindGlobe(true);
-  });
+  // Camada de Aeroportos do Mundo (ArcGIS)
+  $("btnAirports")?.addEventListener("click", () => toggleAirports());
 
-  // Forma A: Radar e Mapa de Ventos Windy em Tela Cheia
+  // Radar e Mapa de Ventos Windy em Tela Cheia
   $("btnWindMap")?.addEventListener("click", () => toggleWindyMap());
   $("weatherOpenMapBtn")?.addEventListener("click", () => {
     toggleWeatherCard(false);
@@ -4018,8 +4112,19 @@ function setupEvents() {
     if (state.view === "city" && state.map) {
       state.map.flyTo({ center: [state.city.lon, state.city.lat], zoom: 10.5, duration: 700 });
     } else {
+      // Sincroniza os dois botões: restaura a rotação do globo e atualiza o botão para ⏸ (pausar)
+      state.autoRotatePaused = false;
+      const c = state.globe?.controls?.();
+      if (c) c.autoRotate = true;
+      document.body.classList.add("is-orbiting");
+      syncAutoRotateUI();
+
       state.globe?.pointOfView({ lat: state.city.lat, lng: state.city.lon, altitude: 1.6 }, 700);
+      showToast("Globo reorientado e rotação retomada");
     }
+  });
+  $("toggleAutoRotate")?.addEventListener("click", () => {
+    toggleAutoRotate();
   });
 
   // Geolocalização
@@ -4168,13 +4273,16 @@ function initDynamicStarfield() {
     ctx.clearRect(0, 0, width, height);
 
     // Watchdog de 60 FPS e Auto-Rotação Contínua Garantida da Terra:
-    // Se o usuário não está arrastando o globo há mais de 800ms, assegura que a rotação esteja 100% ativa
-    if (state.view === "globe" && !state.isDraggingGlobe && state.globe) {
+    // Se o usuário não está arrastando o globo há mais de 800ms e a rotação não está pausada, assegura que esteja ativa
+    if (state.view === "globe" && !state.isDraggingGlobe && state.globe && !state.autoRotatePaused) {
       const controls = state.globe.controls?.();
       if (controls && !controls.autoRotate && performance.now() - state.lastUserInteractionTime > 800) {
         controls.autoRotate = true;
       }
     }
+
+    // Atualiza a iluminação adaptativa conforme o zoom da câmera (clareia o mapa no zoom)
+    updateZoomIllumination();
 
     // O céu se move estritamente na DIREÇÃO CONTRÁRIA ao movimento do globo (Requisito do usuário)
     let globeDeltaX = 0;
@@ -4307,11 +4415,32 @@ async function start() {
   request("/api/config")
     .then((config) => {
       state.cameraConfig = config;
+      if (config.mapTilerKey) {
+        state.mapTilerKey = config.mapTilerKey;
+        if (config.mapTilerStyle) state.mapTilerStyle = config.mapTilerStyle;
+        applyMapTilerGlobe(config.mapTilerKey, config.mapTilerStyle);
+      }
       if (!config.windyConfigured) {
         $("cameraProvider").textContent = "TRANSMISSÕES AO VIVO";
       }
     })
     .catch(() => {});
+
+  setTimeout(() => {
+    loadAirports();
+  }, 1500);
+
+  window.state = state;
+  window.toggleAirports = toggleAirports;
+  window.selectAirport = selectAirport;
+  window.applyMapTilerGlobe = applyMapTilerGlobe;
+  window.setMapTilerKey = (key, style = "hybrid-v4") => {
+    if (key) {
+      localStorage.setItem("MAPTILER_API_KEY", key);
+      applyMapTilerGlobe(key, style);
+      showToast("Chave MapTiler Hybrid-v4 aplicada!");
+    }
+  };
 
   // Exibe a tela de abertura se for a primeira vez
   const hasVisited = sessionStorage.getItem("radio-atlas-entered");
