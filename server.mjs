@@ -77,7 +77,8 @@ export async function api(req,res,url) {
     const webcamsKey = process.env.WINDY_API_KEY_WEBCAMS || process.env.WINDY_API_KEY_Webcams || process.env.WINDY_API_KEY || '';
     const mapKey = process.env.WINDY_API_KEY_MAP_FORECAST || process.env.WINDY_API_KEY_MAP || process.env.WINDY_API_KEY_Map_Forecast || process.env['WINDY_API_KEY_Map Forecast'] || '';
     const pointKey = process.env.WINDY_API_KEY_POINT_FORECAST || process.env.WINDY_API_KEY_POINT || process.env.WINDY_API_KEY_Point_Forecast || process.env['WINDY_API_KEY_Point Forecast'] || '';
-    const mapTilerKey = (process.env.MAPTILER_API_KEY || process.env.MAPTILER_KEY || process.env.MapTiler_API_Key || '').trim();
+    const defaultMapTilerKey = 'fVnSiLiMILfAw3T6c5YJ';
+    const mapTilerKey = (process.env.MAPTILER_API_KEY || process.env.MAPTILER_KEY || process.env.MapTiler_API_Key || defaultMapTilerKey).trim();
     const mapTilerStyle = (process.env.MAPTILER_STYLE || 'hybrid-v4').trim();
     return json(res,200,{
       windyConfigured: Boolean(webcamsKey),

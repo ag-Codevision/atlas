@@ -96,10 +96,12 @@ const state = {
     initialized: false,
     searchTimer: null
   },
-  mapTilerKey: (typeof localStorage !== "undefined" ? localStorage.getItem("MAPTILER_API_KEY") : "") || "",
+  mapTilerKey: (typeof localStorage !== "undefined" ? localStorage.getItem("MAPTILER_API_KEY") : "") || "fVnSiLiMILfAw3T6c5YJ",
   mapTilerStyle: "hybrid-v4",
   autoRotatePaused: false
 };
+
+const DEFAULT_MAPTILER_KEY = "fVnSiLiMILfAw3T6c5YJ";
 
 const $ = (id) => document.getElementById(id);
 const audio = $("audioPlayer");
@@ -1752,9 +1754,9 @@ function updateZoomIllumination() {
   // alt <= 0.85: aproximação de cidade/região -> 100% claro e diurno para visualização dos detalhes do mapa
   const zoomFactor = Math.max(0, Math.min(1, (1.45 - alt) / (1.45 - 0.70)));
 
-  // Luz ambiente: de 0.88 (espaço) até 3.25 (zoom detalhado nítido e iluminado)
+  // Luz ambiente: de 0.88 (espaço) até 4.20 (zoom detalhado nítido e iluminado)
   const baseIntensity = 0.88;
-  const targetIntensity = 3.25;
+  const targetIntensity = 4.20;
   ambLight.intensity = baseIntensity + (targetIntensity - baseIntensity) * zoomFactor;
 
   // Interpola a cor de azul-escuro espacial (0x5a6e88) para branco puro solar (0xffffff)
@@ -1763,9 +1765,28 @@ function updateZoomIllumination() {
   const b = (136 + (255 - 136) * zoomFactor) / 255;
   ambLight.color.setRGB(r, g, b);
 
+  // Luz frontal de câmera para iluminar com clareza máxima qualquer região do planeta ao dar zoom, mesmo em áreas noturnas
+  const camera = state.globe.camera?.();
+  if (camera && dirLight) {
+    if (!state.cameraZoomLight) {
+      const czLight = dirLight.clone();
+      czLight.color.setHex(0xffffff);
+      czLight.intensity = 0;
+      scene.add(czLight);
+      scene.add(czLight.target);
+      state.cameraZoomLight = czLight;
+    }
+    if (state.cameraZoomLight) {
+      state.cameraZoomLight.position.copy(camera.position);
+      state.cameraZoomLight.target.position.set(0, 0, 0);
+      state.cameraZoomLight.target.updateMatrixWorld();
+      state.cameraZoomLight.intensity = zoomFactor * 4.5;
+    }
+  }
+
   if (dirLight) {
     // Atenua sombras excessivamente duras em zoom aproximado
-    dirLight.intensity = 3.6 - (1.4 * zoomFactor);
+    dirLight.intensity = Math.max(1.8, 3.6 - (1.4 * zoomFactor));
   }
 }
 
@@ -1998,7 +2019,7 @@ let globeRotateResumeTimer = null;
 // APLICAÇÃO DO MAPA DE SATÉLITE HÍBRIDO (MAPTILER HYBRID-V4) NO GLOBO 3D
 function applyMapTilerGlobe(apiKey, style = "hybrid-v4") {
   if (!state.globe) return;
-  const key = (apiKey || state.mapTilerKey || "").trim();
+  const key = (apiKey || state.mapTilerKey || (typeof localStorage !== "undefined" ? localStorage.getItem("MAPTILER_API_KEY") : "") || DEFAULT_MAPTILER_KEY).trim();
   if (!key) return;
 
   state.mapTilerKey = key;
@@ -2010,6 +2031,14 @@ function applyMapTilerGlobe(apiKey, style = "hybrid-v4") {
     state.globe
       .globeTileEngineUrl((x, y, l) => `https://api.maptiler.com/maps/${state.mapTilerStyle}/${l}/${x}/${y}.jpg?key=${key}`)
       .globeTileEngineMaxLevel(17);
+
+    // Notifica a câmera para renderizar os tiles no ponto de vista atual imediatamente
+    try {
+      const pov = state.globe.pointOfView();
+      if (pov && typeof pov.lat === "number") {
+        state.globe.pointOfView(pov);
+      }
+    } catch {}
 
     const attr = $("mapAttribution");
     if (attr) {
@@ -2230,11 +2259,16 @@ async function initGlobe() {
     controls.dampingFactor = 0.10;
     controls.rotateSpeed = 0.9;
     controls.zoomSpeed = 1.0;
+    // Permite zoom aproximado em alta definição até as ruas e cidades (raio da Terra = 100)
+    controls.minDistance = 100.3;
+    controls.maxDistance = 500;
 
-    // Se a chave MapTiler estiver configurada, aplica o mapa de satélite híbrido interativo com zoom
-    if (state.mapTilerKey) {
-      applyMapTilerGlobe(state.mapTilerKey, state.mapTilerStyle);
-    }
+    controls.addEventListener("change", () => {
+      updateZoomIllumination();
+    });
+
+    // Aplica o mapa de satélite híbrido interativo MapTiler imediatamente
+    applyMapTilerGlobe(state.mapTilerKey, state.mapTilerStyle);
 
     // Retícula e Sintonia ao Arrasto com feedback visual temático
     const reticle = $("tuningReticle");
@@ -4097,7 +4131,7 @@ function setupEvents() {
       state.map.zoomIn({ duration: 300 });
     } else if (state.globe) {
       const view = state.globe.pointOfView();
-      state.globe.pointOfView({ lat: view.lat, lng: view.lng, altitude: Math.max(0.35, view.altitude * 0.78) }, 400);
+      state.globe.pointOfView({ lat: view.lat, lng: view.lng, altitude: Math.max(0.005, view.altitude * 0.70) }, 300);
     }
   });
   $("zoomOut").addEventListener("click", () => {
@@ -4105,7 +4139,7 @@ function setupEvents() {
       state.map.zoomOut({ duration: 300 });
     } else if (state.globe) {
       const view = state.globe.pointOfView();
-      state.globe.pointOfView({ lat: view.lat, lng: view.lng, altitude: Math.min(2.8, view.altitude * 1.25) }, 400);
+      state.globe.pointOfView({ lat: view.lat, lng: view.lng, altitude: Math.min(3.5, view.altitude * 1.35) }, 300);
     }
   });
   $("resetGlobe").addEventListener("click", () => {
@@ -4415,16 +4449,18 @@ async function start() {
   request("/api/config")
     .then((config) => {
       state.cameraConfig = config;
-      if (config.mapTilerKey) {
-        state.mapTilerKey = config.mapTilerKey;
-        if (config.mapTilerStyle) state.mapTilerStyle = config.mapTilerStyle;
-        applyMapTilerGlobe(config.mapTilerKey, config.mapTilerStyle);
-      }
+      const key = (config.mapTilerKey || (typeof localStorage !== "undefined" ? localStorage.getItem("MAPTILER_API_KEY") : "") || DEFAULT_MAPTILER_KEY).trim();
+      const style = (config.mapTilerStyle || "hybrid-v4").trim();
+      state.mapTilerKey = key;
+      state.mapTilerStyle = style;
+      applyMapTilerGlobe(key, style);
       if (!config.windyConfigured) {
         $("cameraProvider").textContent = "TRANSMISSÕES AO VIVO";
       }
     })
-    .catch(() => {});
+    .catch(() => {
+      applyMapTilerGlobe(DEFAULT_MAPTILER_KEY, "hybrid-v4");
+    });
 
   setTimeout(() => {
     loadAirports();
