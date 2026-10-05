@@ -1908,11 +1908,11 @@ function renderGlobePointsDirect() {
     }
   }
 
-  // AEROPORTOS DO MUNDO (Pontos Azul-Céu / Ciano #38bdf8 — 9.943 aeroportos globais do ArcGIS)
+  // AEROPORTOS DO MUNDO (Pontos Roxo Neon #a855f7 — 9.943 aeroportos globais do ArcGIS)
   if (state.airportsVisible && state.airports && state.airports.length > 0) {
     particleGroups.push({
       id: "airports",
-      color: "#38bdf8",
+      color: "#a855f7",
       size: 2.8,
       points: state.airports
     });
@@ -1927,7 +1927,7 @@ function renderGlobePointsDirect() {
     activePoints.push({
       lat: apt.lat,
       lng: apt.lon,
-      color: "#38bdf8",
+      color: "#c084fc",
       label: `✈️ ${apt.name} (${apt.iata || apt.id})`,
       kind: "airport",
       payload: apt

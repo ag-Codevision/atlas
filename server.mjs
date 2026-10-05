@@ -68,6 +68,150 @@ function rateAllowed(req) {
   const bucket=requests.get(ip)||{start:now,count:0}; bucket.count++; requests.set(ip,bucket);
   return bucket.count<=180;
 }
+
+let cachedTvGardenWebcamsList = null;
+async function getCachedTvGardenWebcams() {
+  if (!cachedTvGardenWebcamsList) {
+    try {
+      const data = JSON.parse(await readFile(resolve(ROOT, 'data/tvgarden-webcams.json'), 'utf8'));
+      cachedTvGardenWebcamsList = data.webcams || [];
+    } catch {
+      cachedTvGardenWebcamsList = [];
+    }
+  }
+  return cachedTvGardenWebcamsList;
+}
+
+function decodeWeatherCode(code) {
+  if (code == null) return 'Tempo local';
+  const map = {
+    0: 'Céu limpo', 1: 'Predominantemente limpo', 2: 'Parcialmente nublado', 3: 'Nublado',
+    45: 'Nevoeiro', 48: 'Nevoeiro denso',
+    51: 'Garoa leve', 53: 'Garoa moderada', 55: 'Garoa densa',
+    61: 'Chuva fraca', 63: 'Chuva moderada', 65: 'Chuva forte',
+    71: 'Neve fraca', 73: 'Neve moderada', 75: 'Neve intensa',
+    80: 'Pancadas de chuva leves', 81: 'Pancadas de chuva', 82: 'Chuva torrencial',
+    95: 'Trovoada', 96: 'Trovoada com granizo', 99: 'Trovoada severa com granizo'
+  };
+  return map[code] || 'Tempo local';
+}
+
+async function fetchWikiAirport(name, iata) {
+  try {
+    const q = iata ? `${iata} airport` : `${name} airport`;
+    const sUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&utf8=&format=json`;
+    const sRes = await fetch(sUrl, {
+      headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+      signal: AbortSignal.timeout(4500)
+    });
+    if (!sRes.ok) return null;
+    const sJson = await sRes.json();
+    const hit = sJson.query?.search?.[0];
+    if (!hit) return null;
+
+    const sumUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`;
+    const sumRes = await fetch(sumUrl, {
+      headers: { 'User-Agent': 'GlobalSyncro/1.0 (contact@globalsyncro.app)' },
+      signal: AbortSignal.timeout(4500)
+    });
+    if (!sumRes.ok) return null;
+    const sum = await sumRes.json();
+    return {
+      title: sum.title,
+      description: sum.description || '',
+      extract: sum.extract || '',
+      photo: sum.originalimage?.source || sum.thumbnail?.source || null,
+      thumbnail: sum.thumbnail?.source || null,
+      url: sum.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function findAirportWebcams(lat, lon, iata, name, maxKm = 65) {
+  try {
+    const allWebcams = await getCachedTvGardenWebcams();
+    const matches = [];
+    const airportRegex = /(?:airport|aeroporto|airfield|runway|airstrip|aviation|aerodrom)/i;
+    const iataRegex = iata && iata.length >= 3 ? new RegExp(`\\b${iata}\\b`, 'i') : null;
+
+    for (const c of allWebcams) {
+      const cLat = c.latitude != null ? c.latitude : c.lat;
+      const cLon = c.longitude != null ? c.longitude : c.lon;
+      if (cLat == null || cLon == null) continue;
+      const dist = distanceKm(lat, lon, cLat, cLon);
+      if (dist <= maxKm) {
+        const title = c.name || c.title || '';
+        const isDirectAirportCam = airportRegex.test(title) || (iataRegex && iataRegex.test(title));
+        matches.push({
+          id: c.id,
+          name: title,
+          city: c.city || '',
+          country: c.country || '',
+          countryCode: c.countryCode || '',
+          streamType: c.streamType || 'youtube',
+          embedUrl: c.embedUrl || '',
+          streamUrl: c.streamUrl || '',
+          distanceKm: Math.round(dist * 10) / 10,
+          isDirectAirportCam: Boolean(isDirectAirportCam)
+        });
+      }
+    }
+
+    matches.sort((a, b) => {
+      if (a.isDirectAirportCam && !b.isDirectAirportCam) return -1;
+      if (!a.isDirectAirportCam && b.isDirectAirportCam) return 1;
+      return a.distanceKm - b.distanceKm;
+    });
+
+    return matches.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchAirportWeather(lat, lon) {
+  try {
+    const windy = await windyForecastProvider.getWeather(lat, lon);
+    if (windy && windy.current) {
+      const windKmh = windy.current.windSpeed || 0;
+      const windKnots = Math.round(windKmh / 1.852);
+      return {
+        provider: 'Windy',
+        temp: windy.current.temp,
+        condition: windy.current.condition || 'Tempo local',
+        windKmh: Math.round(windKmh),
+        windKnots,
+        windDirection: windy.current.windDirection || 0,
+        humidity: windy.current.humidity,
+        pressure: windy.current.pressure || 1013
+      };
+    }
+  } catch {}
+
+  try {
+    const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code`;
+    const res = await fetch(omUrl, { signal: AbortSignal.timeout(3500) });
+    if (res.ok) {
+      const data = await res.json();
+      const cur = data.current || {};
+      const windKmh = cur.wind_speed_10m || 0;
+      const windKnots = Math.round(windKmh / 1.852);
+      return {
+        provider: 'Open-Meteo',
+        temp: cur.temperature_2m != null ? Math.round(cur.temperature_2m) : null,
+        condition: decodeWeatherCode(cur.weather_code),
+        windKmh: Math.round(windKmh),
+        windKnots,
+        windDirection: cur.wind_direction_10m || 0,
+        humidity: cur.relative_humidity_2m,
+        pressure: cur.surface_pressure ? Math.round(cur.surface_pressure) : 1013
+      };
+    }
+  } catch {}
+  return null;
+}
 const textMatch=(a,b)=>String(a||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(String(b||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase());
 export async function api(req,res,url) {
   if (!rateAllowed(req)) return json(res,429,{error:'Muitas consultas. Aguarde um instante.'},{'retry-after':'60'});
@@ -323,6 +467,62 @@ export async function api(req,res,url) {
       return json(res, 200, { airports: cachedAirports, count: cachedAirports.length });
     } catch (err) {
       return json(res, 500, { error: 'Falha ao carregar aeroportos: ' + err.message });
+    }
+  }
+  if (path === '/api/airport/detail') {
+    const id = (params.get('id') || '').trim();
+    const iata = (params.get('iata') || '').trim().toUpperCase();
+    const name = (params.get('name') || '').trim();
+    const lat = coordinate(params.get('lat'), -90, 90);
+    const lon = coordinate(params.get('lon'), -180, 180);
+
+    if (lat === null || lon === null) return json(res, 400, { error: 'Coordenadas inválidas para o aeroporto.' });
+
+    if (!cachedAirports) {
+      try {
+        cachedAirports = JSON.parse(await readFile(resolve(ROOT, 'shared/airports.json'), 'utf8'));
+      } catch {
+        cachedAirports = [];
+      }
+    }
+
+    const found = cachedAirports.find(a => (id && a.id === id) || (iata && a.iata === iata)) || {};
+    const apt = {
+      id: id || found.id || iata,
+      name: name || found.name || 'Aeroporto',
+      iata: iata || found.iata || '',
+      type: found.type || params.get('type') || 'small',
+      typeLabel: found.typeLabel || params.get('typeLabel') || 'Aeroporto',
+      lat,
+      lon,
+      city: found.city || params.get('city') || '',
+      country: found.country || params.get('country') || '',
+      elev: found.elev != null ? found.elev : (number(params, 'elev', null, -500, 30000))
+    };
+
+    const elevM = apt.elev != null ? Math.round(apt.elev * 0.3048) : null;
+
+    try {
+      const [wiki, webcams, weather] = await Promise.all([
+        fetchWikiAirport(apt.name, apt.iata),
+        findAirportWebcams(lat, lon, apt.iata, apt.name, 65),
+        fetchAirportWeather(lat, lon)
+      ]);
+
+      return json(res, 200, {
+        airport: {
+          ...apt,
+          elevM,
+          flightradarUrl: `https://www.flightradar24.com/airport/${(apt.iata || apt.id || '').toLowerCase()}`,
+          flightawareUrl: `https://flightaware.com/live/airport/${apt.id || apt.iata}`,
+          mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
+        },
+        wiki,
+        webcams,
+        weather
+      });
+    } catch (err) {
+      return json(res, 500, { error: 'Falha ao obter detalhes do aeroporto: ' + err.message });
     }
   }
   if (path==='/api/cities') return json(res,200,{cities});

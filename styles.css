@@ -16,6 +16,7 @@
   --radio-dot: #00e676;
   --cam-dot: #00b0ff;
   --tv-dot: #ff3366;
+  --airport-dot: #a855f7;
   --combo-dot: #c58af9;
   --day-glow: rgba(253, 214, 99, 0.2);
   --sunset-glow: rgba(251, 140, 0, 0.25);
@@ -1201,10 +1202,10 @@ body.is-orbiting:not(.camera-active):not(.drawer-open) .tuning-reticle:hover {
 }
 
 .tuning-reticle.mode-airport {
-  --reticle-color: #38bdf8;
-  --reticle-glow: rgba(56, 189, 248, 0.5);
-  --reticle-glow-soft: rgba(56, 189, 248, 0.25);
-  --reticle-glow-strong: rgba(56, 189, 248, 0.95);
+  --reticle-color: #a855f7;
+  --reticle-glow: rgba(168, 85, 247, 0.55);
+  --reticle-glow-soft: rgba(168, 85, 247, 0.28);
+  --reticle-glow-strong: rgba(168, 85, 247, 0.95);
 }
 
 .tuning-reticle.mode-all {
@@ -1453,9 +1454,12 @@ body.is-orbiting:not(.camera-active):not(.drawer-open) .tuning-reticle:hover {
   background: var(--tv-dot);
   box-shadow: 0 0 8px var(--tv-dot);
 }
+.map-legend #legendAirport {
+  color: #d8b4fe;
+}
 .map-legend .legend-airport {
-  background: #38bdf8;
-  box-shadow: 0 0 8px #38bdf8;
+  background: var(--airport-dot);
+  box-shadow: 0 0 8px var(--airport-dot), 0 0 12px rgba(168, 85, 247, 0.5);
 }
 .map-legend .legend-combo {
   background: var(--combo-dot);
@@ -1463,10 +1467,10 @@ body.is-orbiting:not(.camera-active):not(.drawer-open) .tuning-reticle:hover {
 }
 
 #btnAirports.active {
-  background: rgba(56, 189, 248, 0.22) !important;
-  border-color: #38bdf8 !important;
-  color: #38bdf8 !important;
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.45) !important;
+  background: rgba(168, 85, 247, 0.22) !important;
+  border-color: #a855f7 !important;
+  color: #a855f7 !important;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.45) !important;
 }
 
 .back-to-globe {
