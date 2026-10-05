@@ -26,6 +26,10 @@ const state = {
   airports: [],
   airportsVisible: false,
   activeAirport: null,
+  flights: [],
+  flightsVisible: false,
+  activeFlight: null,
+  airnavModalOpen: false,
   windyMapOpen: false,
   windyMapLayer: "wind",
   windyDetailOpen: true,
@@ -735,6 +739,13 @@ async function selectAirport(apt) {
   state.currentAirportCam = null;
 
   // Links preliminares imediatos
+  const airnavBtn = $("airportAirnavBtn");
+  if (airnavBtn) {
+    const code = icaoCode || apt.iata || "";
+    airnavBtn.href = code
+      ? `https://pt.airnavradar.com/airport/${code}`
+      : `https://pt.airnavradar.com/@${apt.lat.toFixed(4)},${apt.lon.toFixed(4)},z11`;
+  }
   const fr24Btn = $("airportFlightradarBtn");
   if (fr24Btn) {
     fr24Btn.href = `https://www.flightradar24.com/${apt.lat.toFixed(4)},${apt.lon.toFixed(4)}/12`;
@@ -884,12 +895,184 @@ async function selectAirport(apt) {
       }
     }
 
-    // 5. Links de Rastreamento de Voos (FlightRadar24)
+    // 5. Links de Rastreamento de Voos (AirNav Radar & FlightRadar24)
+    if (res.airport && res.airport.airnavUrl && airnavBtn) {
+      airnavBtn.href = res.airport.airnavUrl;
+    }
     if (res.links && res.links.flightradar24 && fr24Btn) {
       fr24Btn.href = res.links.flightradar24;
     }
   } catch (err) {
     console.warn("Falha ao obter dados detalhados do aeroporto:", err);
+  }
+}
+
+// INTEGRAÇÃO OPENSKY NETWORK (VOOS AO VIVO 3D NO GLOBO)
+let flightPollingTimer = null;
+
+async function toggleLiveFlights(force) {
+  const shouldShow = force !== undefined ? force : !state.flightsVisible;
+  state.flightsVisible = shouldShow;
+  const btn = $("btnLiveFlights");
+  const legend = $("legendFlights");
+  btn?.classList.toggle("active", shouldShow);
+  legend?.classList.toggle("hidden", !shouldShow);
+
+  if (shouldShow) {
+    showToast("🛫 Carregando voos mundiais ao vivo (OpenSky Network)...");
+    await fetchLiveFlightsData();
+    clearInterval(flightPollingTimer);
+    flightPollingTimer = setInterval(fetchLiveFlightsData, 16000);
+    showToast(`🛫 Voos em tempo real ativados (${state.flights.length} aeronaves no ar)`);
+  } else {
+    clearInterval(flightPollingTimer);
+    state.flights = [];
+    closeFlightDrawer();
+    updateGlobePoints(true);
+    const countLabel = $("flightsBtnLabel");
+    if (countLabel) countLabel.textContent = "VOOS AO VIVO";
+    showToast("🛫 Camada de voos desativada");
+  }
+}
+
+async function fetchLiveFlightsData() {
+  if (!state.flightsVisible) return;
+  try {
+    const res = await request("/api/flights/live?limit=650");
+    if (res && Array.isArray(res.flights)) {
+      state.flights = res.flights;
+      const countLabel = $("flightsBtnLabel");
+      if (countLabel) {
+        countLabel.textContent = `VOOS (${res.count})`;
+      }
+      updateGlobePoints(true);
+    }
+  } catch (err) {
+    console.warn("Falha ao atualizar voos em tempo real:", err);
+  }
+}
+
+function selectFlight(flight) {
+  if (!flight) return;
+  state.activeFlight = flight;
+
+  // Enquadra a câmera suavemente na aeronave
+  state.globe?.pointOfView({ lat: flight.lat, lng: flight.lng, altitude: 0.75 }, 1000);
+
+  const drawer = $("flightDrawer");
+  if (drawer) drawer.classList.remove("hidden");
+
+  const callsignEl = $("flightCallsign");
+  const countryEl = $("flightCountry");
+  const altEl = $("flightAltitude");
+  const altMEl = $("flightAltitudeM");
+  const spdEl = $("flightSpeed");
+  const spdKtEl = $("flightSpeedKnots");
+  const trackEl = $("flightTrack");
+  const headEl = $("flightHeadingDesc");
+  const icaoEl = $("flightIcao");
+  const airnavBtn = $("flightAirnavBtn");
+
+  const cs = flight.callsign || flight.icao || "AERONAVE";
+  if (callsignEl) callsignEl.textContent = cs;
+  if (countryEl) countryEl.textContent = flight.country || "INTERNACIONAL";
+  if (altEl) altEl.textContent = flight.altFt ? `${flight.altFt.toLocaleString("pt-BR")} ft` : "-- ft";
+  if (altMEl) altMEl.textContent = flight.alt ? `${flight.alt.toLocaleString("pt-BR")} m` : "-- m";
+  if (spdEl) spdEl.textContent = flight.speed ? `${flight.speed} km/h` : "-- km/h";
+  if (spdKtEl) spdKtEl.textContent = flight.speedKnots ? `${flight.speedKnots} kt` : "-- kt";
+  if (trackEl) trackEl.textContent = `${flight.track || 0}°`;
+  if (icaoEl) icaoEl.textContent = flight.icao ? flight.icao.toUpperCase() : "------";
+
+  // Rumo cardeal
+  const deg = flight.track || 0;
+  const dirs = ["Norte", "N-Nordeste", "Nordeste", "L-Nordeste", "Leste", "L-Sudeste", "Sudeste", "S-Sudeste", "Sul", "S-Sudoeste", "Sudoeste", "O-Sudoeste", "Oeste", "O-Noroeste", "Noroeste", "N-Noroeste"];
+  const dirName = dirs[Math.round(deg / 22.5) % 16];
+  if (headEl) headEl.textContent = `Rumo ${dirName}`;
+
+  if (airnavBtn) {
+    airnavBtn.href = flight.callsign
+      ? `https://pt.airnavradar.com/flight/${encodeURIComponent(flight.callsign)}`
+      : `https://pt.airnavradar.com/@${flight.lat.toFixed(4)},${flight.lng.toFixed(4)},z11`;
+    airnavBtn.title = `Rastrear telemetria de ${cs} no AirNav Radar`;
+  }
+
+  showToast(`✈️ Aeronave ${cs} (${flight.country || ""}) em voo`);
+}
+
+function closeFlightDrawer() {
+  const drawer = $("flightDrawer");
+  if (drawer) drawer.classList.add("hidden");
+  state.activeFlight = null;
+}
+
+// INTEGRAÇÃO AIRNAV RADAR (MODAL GLOBAL & SINCRONIZAÇÃO COM GLOBO)
+function toggleAirNavModal(force, targetLat, targetLon, zoom) {
+  const modal = $("airnavModalBackdrop");
+  const btn = $("btnAirNavRadar");
+  if (!modal) return;
+
+  const isHidden = modal.classList.contains("hidden");
+  const shouldOpen = force !== undefined ? force : isHidden;
+  state.airnavModalOpen = shouldOpen;
+
+  modal.classList.toggle("hidden", !shouldOpen);
+  btn?.classList.toggle("active", shouldOpen);
+
+  if (shouldOpen) {
+    let lat = targetLat;
+    let lon = targetLon;
+    let z = zoom || 7;
+
+    if (lat == null || lon == null) {
+      if (state.activeAirport) {
+        lat = state.activeAirport.lat;
+        lon = state.activeAirport.lon;
+        z = 10;
+      } else if (state.activeFlight) {
+        lat = state.activeFlight.lat;
+        lon = state.activeFlight.lng;
+        z = 9;
+      } else {
+        const pov = state.globe?.pointOfView();
+        if (pov && typeof pov.lat === "number") {
+          lat = pov.lat;
+          lon = pov.lng;
+        } else if (state.city) {
+          lat = state.city.lat;
+          lon = state.city.lon;
+        } else {
+          lat = -15.78;
+          lon = -47.92;
+        }
+      }
+    }
+
+    syncAirNavWithCoords(lat, lon, z);
+    showToast("📡 AirNav Radar: Tráfego aéreo ao vivo carregado");
+  }
+}
+
+function syncAirNavWithCoords(lat, lon, zoom = 7) {
+  const extBtn = $("airnavExternalBtn");
+  const launchBtn = $("airnavLaunchFullBtn");
+  const statusEl = $("airnavStatusText");
+  const coordsEl = $("airnavCockpitCoords");
+  const zoomEl = $("airnavCockpitZoom");
+
+  const url = `https://pt.airnavradar.com/@${Number(lat).toFixed(4)},${Number(lon).toFixed(4)},z${zoom}`;
+  if (extBtn) extBtn.href = url;
+  if (launchBtn) {
+    launchBtn.href = url;
+    launchBtn.title = `Abrir radar em ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° no AirNav Radar`;
+  }
+  if (statusEl) {
+    statusEl.textContent = `Coordenadas: ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° (Zoom ${zoom})`;
+  }
+  if (coordsEl) {
+    coordsEl.textContent = `${Number(lat).toFixed(3)}° , ${Number(lon).toFixed(3)}°`;
+  }
+  if (zoomEl) {
+    zoomEl.textContent = `Radar Regional (z${zoom})`;
   }
 }
 
@@ -2294,9 +2477,10 @@ function renderGlobePointsDirect() {
     state.globe.particlesData(particleGroups);
   }
 
-  // Atualiza o marcador HTML 2D de alta nitidez (fixo em tela, sempre pequenininho, nunca escala com o zoom)
+  // Atualiza o marcador HTML 2D de alta nitidez e os aviões 3D em tempo real
   if (typeof state.globe.htmlElementsData === "function") {
-    state.globe.htmlElementsData(activePoints);
+    const flightsToShow = (state.flightsVisible && Array.isArray(state.flights)) ? state.flights : [];
+    state.globe.htmlElementsData([...activePoints, ...flightsToShow]);
   }
 
   // Desativa polígonos/prismas 3D volumétricos (evita polígono amarelo gigante no zoom)
@@ -2430,8 +2614,28 @@ async function initGlobe() {
       .htmlElementsData([])
       .htmlLat("lat")
       .htmlLng("lng")
-      .htmlAltitude(0.002)
+      .htmlAltitude((d) => d.type === "flight" ? Math.min(0.045, Math.max(0.012, (d.alt || 5000) / 350000)) : 0.002)
       .htmlElement((point) => {
+        if (point.type === "flight") {
+          const marker = document.createElement("div");
+          marker.className = "globe-airplane-marker";
+          const track = Number(point.track) || 0;
+          const altTxt = point.altFt ? `${point.altFt.toLocaleString('pt-BR')} ft` : `${point.alt || 0} m`;
+          const spdTxt = point.speed ? `${point.speed} km/h` : '';
+          marker.title = `✈️ ${point.callsign || point.icao} (${point.country || 'Voo'})\nAltitude: ${altTxt}\nVelocidade: ${spdTxt}\nClique para telemetria e AirNav Radar`;
+          marker.innerHTML = `
+            <svg class="airplane-svg" viewBox="0 0 24 24" style="transform: rotate(${track}deg);">
+              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+            </svg>
+            <span class="airplane-callsign-tag">${escapeHtml(point.callsign || point.icao)}</span>
+          `;
+          marker.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectFlight(point);
+          });
+          return marker;
+        }
+
         const marker = document.createElement("div");
         marker.className = "globe-active-marker";
         marker.title = point.label || "";
@@ -4370,6 +4574,30 @@ function setupEvents() {
 
   // Camada de Aeroportos do Mundo (ArcGIS)
   $("btnAirports")?.addEventListener("click", () => toggleAirports());
+
+  // Voos ao Vivo em Tempo Real no Globo 3D (OpenSky Network)
+  $("btnLiveFlights")?.addEventListener("click", () => toggleLiveFlights());
+  $("closeFlightDrawer")?.addEventListener("click", closeFlightDrawer);
+
+  // Radar Aéreo Completo Global (AirNav Radar)
+  $("btnAirNavRadar")?.addEventListener("click", () => toggleAirNavModal());
+  $("closeAirnavModal")?.addEventListener("click", () => toggleAirNavModal(false));
+  $("airnavSyncGlobeBtn")?.addEventListener("click", () => {
+    const pov = state.globe?.pointOfView();
+    if (pov && typeof pov.lat === "number") {
+      syncAirNavWithCoords(pov.lat, pov.lng, 8);
+      showToast("📍 AirNav Radar sincronizado com a visão atual do globo");
+    }
+  });
+  document.querySelectorAll(".region-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const lat = Number(chip.dataset.lat);
+      const lon = Number(chip.dataset.lon);
+      const zoom = Number(chip.dataset.zoom) || 7;
+      syncAirNavWithCoords(lat, lon, zoom);
+      state.globe?.pointOfView({ lat, lng: lon, altitude: 0.8 }, 1200);
+    });
+  });
 
   // Painel e Card Informativo do Aeroporto (Fotos Wikipédia, Webcams, Meteorologia, Ações)
   $("closeAirportDrawer")?.addEventListener("click", closeAirportDrawer);

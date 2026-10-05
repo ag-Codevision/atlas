@@ -1465,12 +1465,33 @@ body.is-orbiting:not(.camera-active):not(.drawer-open) .tuning-reticle:hover {
   background: var(--combo-dot);
   box-shadow: 0 0 6px var(--combo-dot);
 }
+.map-legend #legendFlights {
+  color: #67e8f9;
+}
+.map-legend .legend-flights {
+  background: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff, 0 0 12px rgba(0, 240, 255, 0.6);
+}
 
 #btnAirports.active {
   background: rgba(168, 85, 247, 0.22) !important;
   border-color: #a855f7 !important;
   color: #a855f7 !important;
   box-shadow: 0 0 16px rgba(168, 85, 247, 0.45) !important;
+}
+
+#btnLiveFlights.active {
+  background: rgba(0, 240, 255, 0.2) !important;
+  border-color: #00f0ff !important;
+  color: #00f0ff !important;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.45) !important;
+}
+
+#btnAirNavRadar.active {
+  background: rgba(56, 189, 248, 0.25) !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4) !important;
 }
 
 .back-to-globe {
@@ -4886,6 +4907,568 @@ body.has-active-player .station-drawer {
   padding: 8px 12px;
 }
 
+.airport-action-btn.airnav-accent {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(14, 165, 233, 0.3));
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.2);
+}
+
+.airport-action-btn.airnav-accent:hover {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.38), rgba(14, 165, 233, 0.48));
+  border-color: #38bdf8;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+}
+
+/* MARCADOR 3D DO AVIÃO NO GLOBO (OPENSKY NETWORK) */
+.globe-airplane-marker {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: center center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.globe-airplane-marker .airplane-svg {
+  width: 19px;
+  height: 19px;
+  fill: #00f0ff;
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.85)) drop-shadow(0 0 12px rgba(0, 240, 255, 0.45));
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.globe-airplane-marker:hover .airplane-svg {
+  transform: scale(1.35);
+  fill: #ffffff;
+  filter: drop-shadow(0 0 10px #00f0ff) drop-shadow(0 0 20px rgba(0, 240, 255, 0.8));
+}
+
+.globe-airplane-marker .airplane-callsign-tag {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 15, 29, 0.88);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #a5f3fc;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.globe-airplane-marker:hover .airplane-callsign-tag {
+  opacity: 1;
+}
+
+/* DRAWER / CARD DO VOO SELECIONADO (TELEMETRIA EM TEMPO REAL) */
+.flight-drawer {
+  position: fixed;
+  top: 86px;
+  right: 28px;
+  width: 320px;
+  max-width: calc(100vw - 36px);
+  background: rgba(10, 15, 29, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 30px rgba(0, 240, 255, 0.15);
+  z-index: 1200;
+  overflow: hidden;
+  animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flight-drawer-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.flight-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flight-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 10px #00f0ff;
+  animation: radar-pulse 1.6s infinite;
+}
+
+.flight-callsign-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #f8fafc;
+}
+
+.flight-country-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.flight-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.flight-drawer-body {
+  padding: 16px;
+}
+
+.flight-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.flight-stat-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flight-stat-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.flight-stat-val {
+  font-family: var(--font-mono, monospace);
+  font-size: 15px;
+  font-weight: 700;
+  color: #00f0ff;
+}
+
+.flight-stat-sub {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.flight-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flight-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.3), rgba(14, 165, 233, 0.45));
+  border: 1px solid #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+}
+
+.flight-action-btn:hover {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.5), rgba(14, 165, 233, 0.65));
+  box-shadow: 0 0 26px rgba(56, 189, 248, 0.55);
+  transform: translateY(-1px);
+}
+
+/* MODAL AIRNAV RADAR GLOBAL (IN-APP) */
+.airnav-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fade-in 0.25s ease;
+}
+
+.airnav-modal-window {
+  width: min(1200px, 96vw);
+  height: min(850px, 90vh);
+  background: #090d16;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 24px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.85), 0 0 40px rgba(56, 189, 248, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.airnav-modal-header {
+  padding: 16px 22px;
+  background: rgba(15, 23, 42, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.airnav-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.airnav-live-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 12px #38bdf8;
+  animation: radar-pulse 1.8s infinite;
+}
+
+.airnav-icon {
+  font-size: 20px;
+}
+
+.airnav-title-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.airnav-title-texts strong {
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: #f8fafc;
+}
+
+.airnav-title-texts small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.airnav-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.airnav-header-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.airnav-header-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.airnav-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.airnav-modal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.airnav-quick-regions {
+  padding: 10px 20px;
+  background: rgba(10, 15, 26, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.airnav-quick-regions::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-regions-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.region-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.region-chip:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+/* COCKPIT HUB DO AIRNAV RADAR */
+.airnav-cockpit-hub {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  padding: 40px;
+  background: radial-gradient(circle at center, #0b1329 0%, #030712 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.airnav-radar-display {
+  flex-shrink: 0;
+  width: 280px;
+  height: 280px;
+  position: relative;
+}
+
+.radar-scope {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(2, 6, 23, 0.95);
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 35px rgba(56, 189, 248, 0.25), inset 0 0 30px rgba(56, 189, 248, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-sweep {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 50%;
+  transform-origin: 0 0;
+  background: conic-gradient(from 0deg, rgba(56, 189, 248, 0.5) 0deg, rgba(56, 189, 248, 0) 60deg);
+  animation: radar-sweep-anim 3.5s linear infinite;
+  border-radius: 0 100% 0 0;
+}
+
+.radar-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed rgba(56, 189, 248, 0.25);
+}
+
+.ring-1 { width: 33%; height: 33%; }
+.ring-2 { width: 66%; height: 66%; }
+.ring-3 { width: 95%; height: 95%; border-style: solid; }
+
+.radar-crosshair-h {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.radar-crosshair-v {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.radar-blip {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: blip-flash 3.5s infinite;
+}
+
+.blip-1 { top: 32%; left: 62%; animation-delay: 0.8s; }
+.blip-2 { top: 68%; left: 35%; animation-delay: 2.1s; }
+.blip-3 { top: 45%; left: 24%; animation-delay: 2.8s; }
+
+.airnav-hub-info {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.airnav-hub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 4px 12px;
+  border-radius: 999px;
+  width: max-content;
+}
+
+.airnav-hub-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.airnav-hub-desc {
+  font-size: 13.5px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.airnav-coords-card {
+  display: flex;
+  gap: 16px;
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.coords-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.coords-item span {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+
+.coords-item strong {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  color: #38bdf8;
+}
+
+.airnav-hub-actions {
+  margin-top: 8px;
+}
+
+.airnav-launch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.4);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.airnav-launch-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+  box-shadow: 0 0 35px rgba(56, 189, 248, 0.6);
+  transform: translateY(-2px);
+}
+
+@keyframes radar-sweep-anim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes blip-flash {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  10%, 25% { opacity: 1; transform: scale(1.4); }
+  50% { opacity: 0.3; transform: scale(1); }
+}
+
+@keyframes radar-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
 @media (max-width: 768px) {
   .airport-drawer {
     top: auto;
@@ -4896,6 +5479,25 @@ body.has-active-player .station-drawer {
     max-height: 82vh;
     border-radius: 22px 22px 0 0;
     z-index: 1500;
+  }
+  .flight-drawer {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 22px 22px 0 0;
+    z-index: 1500;
+  }
+  .airnav-modal-backdrop {
+    padding: 0;
+  }
+  .airnav-modal-window {
+    width: 100%;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
   }
 }
 

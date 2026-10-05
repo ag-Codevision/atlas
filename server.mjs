@@ -47,6 +47,41 @@ publicFiles.set('/data/tvgarden-tv.json','data/tvgarden-tv.json');
 publicFiles.set('/data/tvgarden-country-coords.json','data/tvgarden-country-coords.json');
 publicFiles.set('/shared/airports.json','shared/airports.json');
 let cachedAirports = null;
+let cachedLiveFlights = { time: 0, states: [] };
+let liveFlightFetchPromise = null;
+
+async function fetchLiveFlights() {
+  const now = Date.now();
+  if (now - cachedLiveFlights.time < 12000 && cachedLiveFlights.states.length > 0) {
+    return cachedLiveFlights.states;
+  }
+  if (liveFlightFetchPromise) return liveFlightFetchPromise;
+
+  liveFlightFetchPromise = (async () => {
+    try {
+      const resp = await fetch('https://opensky-network.org/api/states/all', {
+        headers: { 'User-Agent': 'Orbita-GlobalSyncro/1.0' },
+        signal: AbortSignal.timeout(9000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data.states)) {
+          const valid = data.states.filter(s => s[5] != null && s[6] != null && !s[8]);
+          cachedLiveFlights = { time: Date.now(), states: valid };
+          return valid;
+        }
+      }
+    } catch {
+      // Fallback gracioso mantendo o cache mais recente
+    } finally {
+      liveFlightFetchPromise = null;
+    }
+    return cachedLiveFlights.states;
+  })();
+
+  return liveFlightFetchPromise;
+}
+
 const mime = {'.html':'text/html','.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
 const requests = new Map();
 function json(res,status,body,headers={}) {
@@ -642,6 +677,8 @@ export async function api(req,res,url) {
         airport: {
           ...apt,
           elevM,
+          airnavUrl: `https://pt.airnavradar.com/airport/${apt.id || apt.iata || ''}`,
+          airnavRadarUrl: `https://pt.airnavradar.com/@${lat},${lon},z11`,
           flightradarUrl: `https://www.flightradar24.com/airport/${(apt.iata || apt.id || '').toLowerCase()}`,
           flightawareUrl: `https://flightaware.com/live/airport/${apt.id || apt.iata}`,
           mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
@@ -652,6 +689,56 @@ export async function api(req,res,url) {
       });
     } catch (err) {
       return json(res, 500, { error: 'Falha ao obter detalhes do aeroporto: ' + err.message });
+    }
+  }
+  if (path==='/api/flights/live') {
+    try {
+      const states = await fetchLiveFlights();
+      const limit = Math.min(Math.max(Number(params.get('limit')) || 650, 50), 2500);
+
+      const north = params.get('north') ? Number(params.get('north')) : null;
+      const south = params.get('south') ? Number(params.get('south')) : null;
+      const east = params.get('east') ? Number(params.get('east')) : null;
+      const west = params.get('west') ? Number(params.get('west')) : null;
+
+      let filtered = states;
+      if (north != null && south != null && east != null && west != null) {
+        filtered = states.filter(s => {
+          const lat = s[6], lon = s[5];
+          const latOk = lat >= south && lat <= north;
+          const lonOk = west <= east ? (lon >= west && lon <= east) : (lon >= west || lon <= east);
+          return latOk && lonOk;
+        });
+      }
+
+      let resultStates = filtered;
+      if (resultStates.length > limit) {
+        const step = resultStates.length / limit;
+        resultStates = Array.from({ length: limit }, (_, i) => resultStates[Math.floor(i * step)]);
+      }
+
+      const flights = resultStates.map(s => ({
+        icao: s[0],
+        callsign: (s[1] || '').trim(),
+        country: s[2] || '',
+        lng: Math.round(s[5] * 1000) / 1000,
+        lat: Math.round(s[6] * 1000) / 1000,
+        alt: Math.round(s[7] || 0),
+        altFt: Math.round((s[7] || 0) * 3.28084),
+        speed: Math.round((s[9] || 0) * 3.6),
+        speedKnots: Math.round((s[9] || 0) * 1.94384),
+        track: Math.round(s[10] || 0),
+        type: 'flight'
+      }));
+
+      return json(res, 200, {
+        time: cachedLiveFlights.time || Date.now(),
+        count: flights.length,
+        totalInAir: states.length,
+        flights
+      });
+    } catch (err) {
+      return json(res, 500, { error: 'Falha ao buscar voos em tempo real: ' + err.message });
     }
   }
   if (path==='/api/cities') return json(res,200,{cities});
