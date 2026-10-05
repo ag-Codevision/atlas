@@ -176,8 +176,11 @@
             <div class="weather-timeline-title">PRÓXIMAS HORAS</div>
             <div class="weather-hourly-timeline" id="weatherHourlyTimeline"></div>
             <div class="weather-card-footer">
-              <button id="weatherOpenMapBtn" class="weather-open-map-btn" title="Abrir visualização de ventos em movimento no mapa">
-                <span>Ver Mapa de Ventos & Radar (Windy)</span>
+              <button id="weatherOpenGlobeBtn" class="weather-open-globe-btn" title="Forma B: Ativar correntes e vetores de vento 3D na esfera do Globo">
+                <span>🌐 Ventos 3D no Globo</span>
+              </button>
+              <button id="weatherOpenMapBtn" class="weather-open-map-btn" title="Forma A: Ver mapa interativo e radar da Windy em tela cheia">
+                <span>🌪️ Radar Windy (Tela Cheia)</span>
                 <span class="weather-btn-arrow">↗</span>
               </button>
             </div>
@@ -277,38 +280,21 @@
               <button class="type-toggle-btn" data-kind="camera">CÂMERAS</button>
               <button class="type-toggle-btn" data-kind="tv">TV</button>
             </div>
-            <button class="windy-map-trigger-btn" id="toggleWindyMap" title="Visualizar mapa de vento e radar em tempo real por Windy" aria-label="Mapa de Ventos e Clima Windy">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
-                <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
-                <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
-              </svg>
-              <span>VENTOS & RADAR</span>
-            </button>
+            <div class="weather-modes-group" role="group" aria-label="Visualizações de Ventos">
+              <button class="windy-mode-btn" id="btnWindGlobe" title="Forma B: Ativar correntes de vento 3D diretamente na curvatura do Globo" aria-label="Ventos 3D no Globo">
+                <span class="mode-icon">🌐</span>
+                <span>VENTOS 3D</span>
+              </button>
+              <button class="windy-mode-btn" id="btnWindMap" title="Forma A: Abrir mapa de ventos e radar da Windy em tela cheia" aria-label="Radar Windy Tela Cheia">
+                <span class="mode-icon">🌪️</span>
+                <span>RADAR WINDY</span>
+              </button>
+            </div>
           </div>
 
           <!-- MAPA 2D -->
           <div class="map-panel hidden" id="mapPanel" aria-label="Visualização do mapa 2D"></div>
           <div class="map-attribution hidden" id="mapAttribution">© OpenStreetMap · © OpenFreeMap · MapLibre</div>
-
-          <!-- MAPA METEOROLÓGICO WINDY COM VENTOS ANIMADOS EM TEMPO REAL -->
-          <div class="windy-map-panel hidden" id="windyMapPanel" aria-label="Mapa Meteorológico Windy com Ventos em Tempo Real">
-            <div class="windy-map-header">
-              <div class="windy-map-info">
-                <span class="windy-map-live-dot"></span>
-                <span id="windyMapCityTitle">VENTOS AO VIVO</span>
-                <span class="windy-brand-tag">WINDY MAP FORECAST</span>
-              </div>
-              <div class="windy-layers-bar">
-                <button class="windy-layer-btn active" data-windy-layer="wind">Ventos</button>
-                <button class="windy-layer-btn" data-windy-layer="rain">Chuva / Radar</button>
-                <button class="windy-layer-btn" data-windy-layer="temp">Temperatura</button>
-                <button class="windy-layer-btn" data-windy-layer="clouds">Nuvens</button>
-              </div>
-              <button id="closeWindyMapBtn" class="windy-close-btn" title="Voltar ao globo" aria-label="Fechar mapa meteorológico">✕</button>
-            </div>
-            <div class="windy-map-frame-wrapper" id="windyMapFrameWrapper"></div>
-          </div>
 
           <!-- 15. LIVE CAMERA EXPERIENCE (PLAYER CINEMATOGRÁFICO) -->
           <div class="camera-panel hidden" id="cameraPanel">
@@ -548,6 +534,34 @@
       <button id="closeMini" aria-label="Fechar câmera" title="Fechar transmissão">×</button>
     </aside>
   </main>
+
+  <!-- MAPA METEOROLÓGICO WINDY COM VENTOS ANIMADOS EM TEMPO REAL (FORMA A: FULLSCREEN) -->
+  <div class="windy-map-panel hidden" id="windyMapPanel" aria-label="Mapa Meteorológico Windy com Ventos em Tempo Real">
+    <div class="windy-map-header">
+      <div class="windy-map-info">
+        <span class="windy-map-live-dot"></span>
+        <span id="windyMapCityTitle">VENTOS AO VIVO</span>
+      </div>
+      <div class="windy-layers-bar">
+        <button class="windy-layer-btn active" data-windy-layer="wind">Ventos</button>
+        <button class="windy-layer-btn" data-windy-layer="rain">Chuva / Radar</button>
+        <button class="windy-layer-btn" data-windy-layer="temp">Temperatura</button>
+        <button class="windy-layer-btn" data-windy-layer="clouds">Nuvens</button>
+        <button class="windy-layer-btn" data-windy-layer="satellite">Satélite</button>
+        <button class="windy-layer-btn" data-windy-layer="waves">Ondas</button>
+        <button class="windy-layer-btn" data-windy-layer="gust">Rajadas</button>
+      </div>
+      <button id="closeWindyMapBtn" class="windy-close-btn" title="Voltar ao globo" aria-label="Fechar mapa meteorológico">✕</button>
+    </div>
+
+    <!-- BOTÃO FLUTUANTE ARTICULADO NO CANTO INFERIOR ESQUERDO PARA ALTERNAR A PREVISÃO 7D -->
+    <button id="btnToggleWindyDetail" class="windy-toggle-detail-btn" title="Alternar barra inferior de previsão horária 7D">
+      <span id="windyDetailIcon" class="toggle-detail-arrow">▼</span>
+      <span id="windyDetailLabel">Ocultar Previsão 7D</span>
+    </button>
+
+    <div class="windy-map-frame-wrapper" id="windyMapFrameWrapper"></div>
+  </div>
 
   <!-- 18. PLAYER DE RÁDIO PERSISTENTE INFERIOR -->
   <footer class="player hidden" id="radioPlayer" aria-label="Player de rádio global">

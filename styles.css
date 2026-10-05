@@ -4065,43 +4065,71 @@ body.has-active-player .station-drawer {
   color: #fff;
 }
 
+/* Footer do card de clima com dois botões para Formas A e B */
 .weather-card-footer {
   margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
-.weather-open-map-btn {
-  width: 100%;
-  padding: 9px 14px;
+.weather-open-globe-btn {
+  padding: 9px 10px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(37, 99, 235, 0.3));
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: #e0f2fe;
-  font-size: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  transition: all 0.25s ease;
+}
+.weather-open-globe-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  transform: translateY(-1px);
+}
+.weather-open-map-btn {
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(37, 99, 235, 0.35));
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #e0f2fe;
+  font-size: 10.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
   transition: all 0.25s ease;
 }
 .weather-open-map-btn:hover {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(37, 99, 235, 0.5));
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.4), rgba(37, 99, 235, 0.6));
   border-color: #38bdf8;
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(56, 189, 248, 0.3);
 }
 
-/* Botão de acionamento do mapa meteorológico Windy na toolbar */
-.windy-map-trigger-btn {
-  display: inline-flex;
+/* Grupo de botões dos Modos Meteorológicos na Toolbar */
+.weather-modes-group {
+  display: flex;
   align-items: center;
   gap: 6px;
+}
+.windy-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(14, 16, 26, 0.65);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: #e0f2fe;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -4110,50 +4138,51 @@ body.has-active-player .station-drawer {
   backdrop-filter: blur(16px);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.windy-map-trigger-btn:hover {
+.windy-mode-btn:hover {
   background: rgba(56, 189, 248, 0.18);
-  border-color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
   color: #fff;
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
   transform: translateY(-1px);
 }
-.windy-map-trigger-btn.active {
+.windy-mode-btn.active {
   background: linear-gradient(135deg, #0284c7, #2563eb);
   border-color: #38bdf8;
   color: #fff;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
 }
 
-/* Painel do Mapa Meteorológico Windy (Windy Map Forecast) */
+/* Painel do Mapa Meteorológico Windy (Forma A: Fundo Imersivo Fullscreen acima da Menubar) */
 .windy-map-panel {
-  position: absolute;
-  z-index: 4;
-  inset: 4% 3% 4% 0;
-  border-radius: 20px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #090c15;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  position: fixed !important;
+  z-index: 1000 !important; /* Garante que fique um nível acima da menubar (.topbar) */
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: #060810;
   display: flex;
   flex-direction: column;
-  animation: fade-in 0.4s both;
+  animation: fade-in 0.25s both;
 }
 .windy-map-panel.hidden {
   display: none !important;
 }
 
 .windy-map-header {
-  height: 52px;
-  padding: 0 16px;
-  background: rgba(11, 14, 25, 0.85);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  height: 54px;
+  padding: 0 clamp(16px, 2.5vw, 32px);
+  background: rgba(10, 13, 22, 0.96);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  z-index: 2;
+  gap: 16px;
+  z-index: 1001;
   flex: none;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
 }
 .windy-map-info {
   display: flex;
@@ -4186,24 +4215,30 @@ body.has-active-player .station-drawer {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 6px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
 }
 .windy-layer-btn {
   background: transparent;
   border: none;
   color: var(--muted, #94a3b8);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 .windy-layer-btn:hover {
   color: #fff;
+  background: rgba(255, 255, 255, 0.06);
 }
 .windy-layer-btn.active {
   background: rgba(56, 189, 248, 0.25);
@@ -4212,21 +4247,71 @@ body.has-active-player .station-drawer {
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
-.windy-close-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* BOTÃO FLUTUANTE ARTICULADO (INFERIOR ESQUERDO) PARA ALTERNAR A PREVISÃO 7D */
+.windy-toggle-detail-btn {
+  position: absolute;
+  bottom: 216px;
+  left: 20px;
+  z-index: 1030;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f1f5f9;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  cursor: pointer;
+  transition: bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+.windy-toggle-detail-btn:hover {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: #38bdf8;
   color: #fff;
-  width: 30px;
-  height: 30px;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85), 0 0 20px rgba(56, 189, 248, 0.35);
+}
+/* Quando a previsão está fechada, o botão fica em bottom: 64px para NÃO tapar o play do player do Windy */
+.windy-toggle-detail-btn.detail-closed {
+  bottom: 64px;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(12, 18, 34, 0.96);
+  color: #7dd3fc;
+}
+.windy-toggle-detail-btn.detail-closed:hover {
+  background: rgba(14, 165, 233, 0.25);
+  border-color: #38bdf8;
+  color: #fff;
+}
+.toggle-detail-arrow {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.windy-toggle-detail-btn.detail-closed .toggle-detail-arrow {
+  transform: rotate(180deg);
+}
+
+.windy-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   transition: all 0.2s;
 }
 .windy-close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.25);
   border-color: #ef4444;
   color: #ef4444;
 }
@@ -4234,7 +4319,7 @@ body.has-active-player .station-drawer {
 .windy-map-frame-wrapper {
   flex: 1;
   width: 100%;
-  height: calc(100% - 52px);
+  height: calc(100vh - 54px);
   position: relative;
   background: #000;
 }

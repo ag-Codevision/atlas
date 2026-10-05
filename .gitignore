@@ -4,6 +4,7 @@ npm-debug.log*
 *.log
 screenshot*.png
 screenshot-*.png
+windy_*test.png
 test-results/
 scratch/
 .system_generated/

@@ -23,8 +23,18 @@ const state = {
   weather: null,
   weatherLoading: false,
   weatherRequestId: 0,
+  windGlobeActive: false,
   windyMapOpen: false,
   windyMapLayer: "wind",
+  windyDetailOpen: true,
+  windyMenuOpen: false,
+  windySatPalette: "blue",
+  windyAirports: false,
+  windyWMO: false,
+  windyPWS: false,
+  windyShipBuoy: false,
+  windyPressure: true,
+  windyParticles: true,
   map: null,
   mapMarkers: [],
   globe: null,
@@ -422,6 +432,7 @@ function selectCity(id, options = {}) {
   loadTvChannels();
   loadWeather();
   if (state.windyMapOpen) updateWindyMap();
+  if (state.windGlobeActive) updateWindGlobe();
 }
 
 // INTEGRAÇÃO WINDY POINT FORECAST (PREVISÃO METEOROLÓGICA)
@@ -436,6 +447,7 @@ async function loadWeather() {
     if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
     state.weather = data;
     renderWeather();
+    if (state.windGlobeActive) updateWindGlobe();
   } catch (err) {
     if (requestId !== state.weatherRequestId || city.id !== state.city.id) return;
     state.weather = null;
@@ -505,10 +517,122 @@ function toggleWeatherCard(force) {
   }
 }
 
-// INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TEMPO REAL)
+// FORMA B: VETORES E CORRENTES DE VENTO 3D DIRETAMENTE NO GLOBO
+function generateGlobalWindArcs() {
+  const arcs = [];
+
+  // 1. CINTURÕES GLOBAIS DE CIRCULAÇÃO ATMOSFÉRICA
+  // Alísios (Trade Winds), Ventos do Oeste (Westerlies), Correntes Polares e Jet Streams
+  const latBands = [
+    // Alísios Tropicais Norte (Leste -> Oeste convergindo para zona equatorial)
+    { startLat: 18, endLat: 6, stepLng: 24, spanLng: -24, color: ['rgba(0, 229, 255, 0.75)', 'rgba(0, 176, 255, 0.2)'], alt: 0.035, speed: 2800 },
+    // Alísios Tropicais Sul (Leste -> Oeste convergindo para zona equatorial)
+    { startLat: -18, endLat: -6, stepLng: 24, spanLng: -24, color: ['rgba(0, 229, 255, 0.75)', 'rgba(0, 176, 255, 0.2)'], alt: 0.035, speed: 2800 },
+    // Ventos do Oeste Temperados Norte (Oeste -> Leste)
+    { startLat: 36, endLat: 52, stepLng: 22, spanLng: 30, color: ['rgba(77, 208, 225, 0.8)', 'rgba(100, 255, 218, 0.25)'], alt: 0.045, speed: 2200 },
+    // Ventos do Oeste Temperados Sul (Oeste -> Leste - "Rugientes 40")
+    { startLat: -36, endLat: -52, stepLng: 22, spanLng: 30, color: ['rgba(77, 208, 225, 0.8)', 'rgba(100, 255, 218, 0.25)'], alt: 0.045, speed: 2200 },
+    // Jet Stream Polar Norte em Alta Altitude
+    { startLat: 48, endLat: 56, stepLng: 30, spanLng: 40, color: ['rgba(128, 222, 234, 0.9)', 'rgba(0, 230, 118, 0.3)'], alt: 0.065, speed: 1700 },
+    // Jet Stream Polar Sul em Alta Altitude
+    { startLat: -48, endLat: -56, stepLng: 30, spanLng: 40, color: ['rgba(128, 222, 234, 0.9)', 'rgba(0, 230, 118, 0.3)'], alt: 0.065, speed: 1700 },
+    // Ventos Polares Norte (Leste -> Oeste)
+    { startLat: 70, endLat: 64, stepLng: 36, spanLng: -32, color: ['rgba(178, 235, 242, 0.65)', 'rgba(255, 255, 255, 0.15)'], alt: 0.035, speed: 3300 },
+    // Ventos Polares Sul (Leste -> Oeste)
+    { startLat: -70, endLat: -64, stepLng: 36, spanLng: -32, color: ['rgba(178, 235, 242, 0.65)', 'rgba(255, 255, 255, 0.15)'], alt: 0.035, speed: 3300 }
+  ];
+
+  latBands.forEach((band) => {
+    for (let lng = -180; lng < 180; lng += band.stepLng) {
+      const offsetLat = Math.sin(lng * 0.05) * 3;
+      const sLat = Math.max(-85, Math.min(85, band.startLat + offsetLat));
+      const eLat = Math.max(-85, Math.min(85, band.endLat + offsetLat));
+      let eLng = lng + band.spanLng;
+      if (eLng > 180) eLng -= 360;
+      if (eLng < -180) eLng += 360;
+
+      arcs.push({
+        startLat: sLat,
+        startLng: lng,
+        endLat: eLat,
+        endLng: eLng,
+        color: band.color,
+        alt: band.alt,
+        stroke: 0.9,
+        dashLength: 0.38,
+        dashGap: 0.15,
+        animateTime: band.speed + Math.floor((lng + 180) * 2)
+      });
+    }
+  });
+
+  // 2. CORRENTES REGIONAIS FOCADAS NA CIDADE ATUAL
+  const city = state.city;
+  if (city && city.lat != null && city.lon != null) {
+    const windSpeed = state.weather?.windSpeed || 15;
+    const animTime = Math.max(1200, Math.min(3200, Math.round(3600 - windSpeed * 40)));
+    const directions = [0, 45, 90, 135, 180, 225, 270, 315];
+    directions.forEach((deg, idx) => {
+      const rad = (deg * Math.PI) / 180;
+      const dist = 4.5 + (idx % 3) * 2.2;
+      const sLat = city.lat - Math.sin(rad) * dist;
+      const sLon = city.lon - Math.cos(rad) * dist;
+      const eLat = city.lat + Math.sin(rad) * (dist * 1.3);
+      const eLon = city.lon + Math.cos(rad) * (dist * 1.3);
+
+      arcs.push({
+        startLat: sLat,
+        startLng: sLon,
+        endLat: eLat,
+        endLng: eLon,
+        color: ['rgba(255, 213, 79, 0.95)', 'rgba(0, 229, 255, 0.35)'],
+        alt: 0.052 + (idx % 2) * 0.018,
+        stroke: 1.3,
+        dashLength: 0.46,
+        dashGap: 0.14,
+        animateTime: animTime
+      });
+    });
+  }
+
+  return arcs;
+}
+
+function toggleWindGlobe(force) {
+  const shouldActive = force !== undefined ? force : !state.windGlobeActive;
+  state.windGlobeActive = shouldActive;
+
+  const btnTop = $("btnWindGlobe");
+  const btnWeather = $("weatherOpenGlobeBtn");
+  btnTop?.classList.toggle("active", shouldActive);
+  btnWeather?.classList.toggle("active", shouldActive);
+
+  if (shouldActive) {
+    // Fecha a Forma A se estiver aberta para visualização imersiva do globo 3D
+    if (state.windyMapOpen) toggleWindyMap(false);
+    if (state.view !== "globe") setView("globe");
+    updateWindGlobe();
+    showToast("🌬️ Forma B ativada: Correntes de vento 3D no Globo");
+  } else {
+    if (state.globe && typeof state.globe.arcsData === "function") {
+      state.globe.arcsData([]);
+    }
+  }
+}
+
+function updateWindGlobe() {
+  if (!state.windGlobeActive || !state.globe) return;
+  if (typeof state.globe.arcsData !== "function") return;
+  const arcs = generateGlobalWindArcs();
+  state.globe.arcsData(arcs);
+}
+
+// FORMA A: INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
 function toggleWindyMap(force, layer) {
   const panel = $("windyMapPanel");
   const btn = $("toggleWindyMap");
+  const btnTop = $("btnWindMap");
+  const btnWeather = $("weatherOpenMapBtn");
   if (!panel) return;
 
   if (layer) state.windyMapLayer = layer;
@@ -518,8 +642,12 @@ function toggleWindyMap(force, layer) {
 
   panel.classList.toggle("hidden", !shouldOpen);
   btn?.classList.toggle("active", shouldOpen);
+  btnTop?.classList.toggle("active", shouldOpen);
+  btnWeather?.classList.toggle("active", shouldOpen);
 
   if (shouldOpen) {
+    // Se a Forma B estiver ativa, desliga para foco total na Forma A
+    if (state.windGlobeActive) toggleWindGlobe(false);
     $("mapPanel")?.classList.add("hidden");
     $("cameraPanel")?.classList.add("hidden");
     $("stationDrawer")?.classList.add("hidden");
@@ -541,16 +669,36 @@ function updateWindyMap() {
     wind: 'wind',
     rain: 'rain',
     temp: 'temp',
-    clouds: 'clouds'
+    clouds: 'clouds',
+    satellite: 'satellite',
+    radar: 'radar',
+    waves: 'waves',
+    gust: 'gust'
   };
   const overlay = overlayMap[layer] || 'wind';
   const key = state.cameraConfig?.windyMapKey || '';
 
+  // Sincroniza classes ativas de botões da barra superior
   document.querySelectorAll("[data-windy-layer]").forEach((b) => {
     b.classList.toggle("active", b.dataset.windyLayer === layer);
   });
 
-  const url = `https://embed.windy.com/embed2.html?lat=${encodeURIComponent(city.lat)}&lon=${encodeURIComponent(city.lon)}&detailLat=${encodeURIComponent(city.lat)}&detailLon=${encodeURIComponent(city.lon)}&width=100%25&height=100%25&zoom=7&level=surface&overlay=${overlay}&product=ecmwf&menu=&message=&marker=true&calendar=now&pressure=true&type=map&location=coordinates&detail=true&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1${key ? `&key=${encodeURIComponent(key)}` : ''}`;
+  // Atualiza botão articulado de previsão 7D no canto inferior esquerdo
+  const isDetailOpen = Boolean(state.windyDetailOpen);
+  const btnToggleDetail = $("btnToggleWindyDetail");
+  if (btnToggleDetail) {
+    btnToggleDetail.classList.toggle("detail-closed", !isDetailOpen);
+    const label = $("windyDetailLabel");
+    if (label) label.textContent = isDetailOpen ? "Ocultar Previsão 7D" : "Abrir Previsão 7D";
+    const icon = $("windyDetailIcon");
+    if (icon) icon.textContent = isDetailOpen ? "▼" : "▲";
+  }
+
+  const detailParam = isDetailOpen ? "true" : "false";
+  const pressureParam = state.windyPressure ? "true" : "false";
+
+  // URL oficial limpa do Windy: menu= vazio para manter os controles de camadas nativos do Windy acessíveis no mapa
+  const url = `https://embed.windy.com/embed2.html?lat=${encodeURIComponent(city.lat)}&lon=${encodeURIComponent(city.lon)}&detailLat=${encodeURIComponent(city.lat)}&detailLon=${encodeURIComponent(city.lon)}&width=100%25&height=100%25&zoom=7&level=surface&overlay=${overlay}&product=ecmwf&menu=&message=&marker=true&calendar=now&pressure=${pressureParam}&type=map&location=coordinates&detail=${detailParam}&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1${key ? `&key=${encodeURIComponent(key)}` : ''}`;
 
   let iframe = wrapper.querySelector("iframe");
   if (!iframe) {
@@ -564,6 +712,8 @@ function updateWindyMap() {
     iframe.src = url;
   }
 }
+
+
 
 // CARREGAMENTO DE RÁDIOS (RADIO BROWSER)
 async function loadStations(keep) {
@@ -1069,6 +1219,20 @@ async function loadCameras() {
 
     if (requestId !== state.cameraRequestId || city.id !== state.city.id) return;
     state.cameras = fetchedCameras;
+
+    // Mescla as câmeras recebidas (Windy Webcams + TV Garden) aos pontos globais do Globo 3D
+    if (fetchedCameras.length > 0) {
+      const existingCamPoints = new Set(
+        state.globalWebcamPoints.map((c) => c.id || `${c.lat || c.latitude},${c.lon || c.longitude}`)
+      );
+      for (const fc of fetchedCameras) {
+        const idKey = fc.id || `${fc.lat || fc.latitude},${fc.lon || fc.longitude}`;
+        if (!existingCamPoints.has(idKey)) {
+          state.globalWebcamPoints.push(fc);
+          existingCamPoints.add(idKey);
+        }
+      }
+    }
 
     const count = state.cameras.length;
     $("cameraCount").textContent = count > 0 ? String(count) : "0";
@@ -1702,14 +1866,14 @@ function renderGlobePointsDirect() {
     }
   }
 
-  // CÂMERAS (Pontos Azuis #00b0ff — Todas as 4.000+ webcams geolocalizadas)
+  // CÂMERAS (Pontos Azuis/Ciano Neon — Todas as 4.000+ webcams geolocalizadas)
   if (showCamera) {
     const cams = state.globalWebcamPoints.length > 0 ? state.globalWebcamPoints : state.cameras;
     if (cams.length > 0) {
       particleGroups.push({
         id: "camera",
-        color: "#00b0ff",
-        size: 2.6,
+        color: state.kind === "camera" ? "#00e5ff" : "#00b0ff",
+        size: state.kind === "camera" ? 3.4 : 2.7,
         points: cams
       });
     }
@@ -1824,6 +1988,19 @@ async function initGlobe() {
       .showGraticules(false)
       // Otimização crucial: ignora raycasting de mouse nas 23.200 partículas, garantindo 60 FPS cravados
       .pointerEventsFilter((obj) => obj && obj.__globeObjType !== "particles")
+      // Arcos tridimensionais esféricos de correntes atmosféricas de vento (Forma B - Windy Wind Globe)
+      .arcsData([])
+      .arcStartLat((d) => d.startLat)
+      .arcStartLng((d) => d.startLng)
+      .arcEndLat((d) => d.endLat)
+      .arcEndLng((d) => d.endLng)
+      .arcColor((d) => d.color || ['rgba(0,229,255,0.75)', 'rgba(100,255,218,0.25)'])
+      .arcAltitude((d) => d.alt || 0.04)
+      .arcStroke((d) => d.stroke || 0.9)
+      .arcDashLength((d) => d.dashLength || 0.4)
+      .arcDashGap((d) => d.dashGap || 0.15)
+      .arcDashInitialGap((d) => d.initialGap || 0)
+      .arcDashAnimateTime((d) => d.animateTime || 2500)
       // Partículas 2D planas de alta performance para todos os 23.200 pontos (NÃO 3D)
       .particlesData([])
       .particlesList((d) => d.points || [])
@@ -1934,25 +2111,44 @@ async function initGlobe() {
             showToast(`📻 Sintonizando ${place.title}, ${place.country}`);
           }
         } else {
-          const any = findClosestAny(lat, lng, 450);
-          if (any) {
-            if (any.kind === "camera") {
-              const cLat = any.payload.lat != null ? any.payload.lat : any.payload.latitude;
-              const cLng = any.payload.lon != null ? any.payload.lon : any.payload.longitude;
+          // Modo Todos: para abrir câmeras e TV neste modo, o usuário clica diretamente no ponto colorido no globo
+          const clickRadiusKm = 140; // Tolerância de clique do mouse sobre o ponto colorido
+          const camHit = findClosestWebcam(lat, lng, clickRadiusKm);
+          const tvHit = findClosestTv(lat, lng, clickRadiusKm);
+
+          if (camHit || tvHit) {
+            const distCam = camHit ? distanceKm(lat, lng, camHit.lat != null ? camHit.lat : camHit.latitude, camHit.lon != null ? camHit.lon : camHit.longitude) : Infinity;
+            const distTv = tvHit ? distanceKm(lat, lng, tvHit.lat != null ? tvHit.lat : tvHit.latitude, tvHit.lon != null ? tvHit.lon : tvHit.longitude) : Infinity;
+
+            if (distCam <= distTv && camHit) {
+              const cLat = camHit.lat != null ? camHit.lat : camHit.latitude;
+              const cLng = camHit.lon != null ? camHit.lon : camHit.longitude;
               state.globe.pointOfView({ lat: cLat, lng: cLng, altitude: 0.95 }, 1200);
-              tuneToWebcam(any.payload, true);
-              showToast(`📹 Câmera conectada: ${any.payload.name}`);
-            } else if (any.kind === "tv") {
-              const tLat = any.payload.lat != null ? any.payload.lat : any.payload.latitude;
-              const tLng = any.payload.lon != null ? any.payload.lon : any.payload.longitude;
+              tuneToWebcam(camHit, true);
+              showToast(`📹 Câmera conectada: ${camHit.name}`);
+              return;
+            } else if (tvHit) {
+              const tLat = tvHit.lat != null ? tvHit.lat : tvHit.latitude;
+              const tLng = tvHit.lon != null ? tvHit.lon : tvHit.longitude;
               state.globe.pointOfView({ lat: tLat, lng: tLng, altitude: 0.95 }, 1200);
-              tuneToTv(any.payload, false);
-              openTvChannel(any.payload);
-              showToast(`📺 Canal de TV: ${any.payload.name}`);
-            } else if (any.kind === "radioGardenPlace") {
-              state.globe.pointOfView({ lat: any.payload.lat, lng: any.payload.lon, altitude: 0.95 }, 1200);
-              tuneToRadioGardenPlace(any.payload, true);
-              showToast(`📻 Sintonizando ${any.payload.title}, ${any.payload.country}`);
+              tuneToTv(tvHit, false);
+              openTvChannel(tvHit);
+              showToast(`📺 Canal de TV: ${tvHit.name}`);
+              return;
+            }
+          }
+
+          // Se não clicou diretamente em um ponto de câmera/TV, a sintonia busca sempre rádio da região mais próxima
+          const place = findClosestRadioGardenPlace(lat, lng, 500);
+          if (place) {
+            state.globe.pointOfView({ lat: place.lat, lng: place.lon, altitude: 0.95 }, 1200);
+            tuneToRadioGardenPlace(place, true);
+            showToast(`📻 Sintonizando ${place.title}, ${place.country}`);
+          } else {
+            const nearestCity = [...cities].sort((a, b) => distanceKm(lat, lng, a.lat, a.lon) - distanceKm(lat, lng, b.lat, b.lon))[0];
+            if (nearestCity) {
+              state.globe.pointOfView({ lat: nearestCity.lat, lng: nearestCity.lon, altitude: 0.95 }, 1200);
+              selectCity(nearestCity);
             }
           }
         }
@@ -1994,8 +2190,7 @@ async function initGlobe() {
     const getSearchingMessage = () => {
       if (state.kind === "camera") return "BUSCANDO CÂMERAS...";
       if (state.kind === "tv") return "SINTONIZANDO TV...";
-      if (state.kind === "radio") return "SINTONIZANDO RÁDIO...";
-      return "SINTONIZANDO...";
+      return "SINTONIZANDO RÁDIO...";
     };
 
     const resumeAutoRotate = (delay = 3200) => {
@@ -2070,22 +2265,20 @@ async function initGlobe() {
             reticle?.classList.remove("searching", "locked");
           }
         } else {
-          // Modo Todos
-          const closestAny = findClosestAny(pov.lat, pov.lng, 550);
-          if (closestAny) {
-            if (closestAny.kind === "camera") {
-              tuneToWebcam(closestAny.payload, true);
-              showToast(`📹 Câmera conectada: ${closestAny.payload.name}`);
-            } else if (closestAny.kind === "tv") {
-              tuneToTv(closestAny.payload, false);
-              showToast(`📺 Canal de TV: ${closestAny.payload.name}`);
-            } else {
-              tuneToRadioGardenPlace(closestAny.payload, !audio.paused && state.station != null);
-              showToast(`📻 Sintonizado em ${closestAny.payload.title}, ${closestAny.payload.country}`);
+          // Modo Todos: a sintonia automática busca SEMPRE rádios!
+          // Para abrir câmeras e TV neste modo, o usuário clica diretamente no ponto colorido no globo.
+          const closestPlace = findClosestRadioGardenPlace(pov.lat, pov.lng, 450);
+          if (closestPlace) {
+            tuneToRadioGardenPlace(closestPlace, !audio.paused && state.station != null);
+            showToast(`📻 Sintonizado em ${closestPlace.title}, ${closestPlace.country}`);
+          } else {
+            const nearestCity = [...cities].sort((a, b) => distanceKm(pov.lat, pov.lng, a.lat, a.lon) - distanceKm(pov.lat, pov.lng, b.lat, b.lon))[0];
+            if (nearestCity && distanceKm(pov.lat, pov.lng, nearestCity.lat, nearestCity.lon) < 600) {
+              selectCity(nearestCity);
+            } else if (reticleLabel) {
+              reticleLabel.textContent = "GIRANDO O PLANETA";
+              reticle?.classList.remove("searching", "locked");
             }
-          } else if (reticleLabel) {
-            reticleLabel.textContent = "GIRANDO O PLANETA";
-            reticle?.classList.remove("searching", "locked");
           }
         }
       }
@@ -2229,20 +2422,41 @@ function renderMapMarkers() {
     }
   }
 
-  // Webcams
+  // Webcams (Câmeras locais da cidade + câmeras da Windy/TV Garden na área visível)
   if (state.kind !== "radio") {
-    state.cameras.forEach((camera) => {
-      if (inMapBounds(camera.latitude, camera.longitude)) {
+    const allCams = [];
+    const seenIds = new Set();
+    const addCam = (cam) => {
+      if (!cam) return;
+      const cLat = cam.lat != null ? cam.lat : cam.latitude;
+      const cLon = cam.lon != null ? cam.lon : cam.longitude;
+      if (cLat == null || cLon == null) return;
+      const cId = cam.id || `${cLat.toFixed(4)},${cLon.toFixed(4)}`;
+      if (!seenIds.has(cId)) {
+        seenIds.add(cId);
+        allCams.push(cam);
+      }
+    };
+    (state.cameras || []).forEach(addCam);
+    (state.globalWebcamPoints || []).forEach(addCam);
+
+    let addedCams = 0;
+    for (const camera of allCams) {
+      if (addedCams >= 120) break;
+      const cLat = camera.lat != null ? camera.lat : camera.latitude;
+      const cLon = camera.lon != null ? camera.lon : camera.longitude;
+      if (inMapBounds(cLat, cLon)) {
         state.mapMarkers.push(
           new window.maplibregl.Marker({
-            element: mapMarker("camera", camera, camera.name),
+            element: mapMarker("camera", camera, camera.name || "Câmera ao Vivo"),
             anchor: "center"
           })
-            .setLngLat([camera.longitude, camera.latitude])
+            .setLngLat([cLon, cLat])
             .addTo(state.map)
         );
+        addedCams++;
       }
-    });
+    }
   }
 }
 
@@ -3713,9 +3927,19 @@ function setupEvents() {
     else openStationDrawer();
   });
 
-  // Recursos Windy API: Previsão do Tempo (Point Forecast) e Mapa de Ventos (Map Forecast)
+  // Recursos Windy API: Previsão do Tempo, Forma A (Radar Fullscreen) e Forma B (Ventos 3D Globo)
   $("localAtmosphere")?.addEventListener("click", () => toggleWeatherCard());
   $("closeWeatherCard")?.addEventListener("click", () => toggleWeatherCard(false));
+
+  // Forma B: Ventos 3D diretamente na curvatura do Globo
+  $("btnWindGlobe")?.addEventListener("click", () => toggleWindGlobe());
+  $("weatherOpenGlobeBtn")?.addEventListener("click", () => {
+    toggleWeatherCard(false);
+    toggleWindGlobe(true);
+  });
+
+  // Forma A: Radar e Mapa de Ventos Windy em Tela Cheia
+  $("btnWindMap")?.addEventListener("click", () => toggleWindyMap());
   $("weatherOpenMapBtn")?.addEventListener("click", () => {
     toggleWeatherCard(false);
     toggleWindyMap(true);
@@ -3727,6 +3951,15 @@ function setupEvents() {
       toggleWindyMap(true, btn.dataset.windyLayer);
     });
   });
+
+  // Fechar e alternar barra inferior de previsão horária 7D (Botão Articulado Inferior Esquerdo)
+  $("btnToggleWindyDetail")?.addEventListener("click", () => {
+    state.windyDetailOpen = !state.windyDetailOpen;
+    updateWindyMap();
+    showToast(state.windyDetailOpen ? "📊 Tabela de previsão horária 7D aberta" : "📊 Tabela de previsão horária 7D recolhida");
+  });
+
+
 
   // Drawer
   $("closeDrawer")?.addEventListener("click", closeStationDrawer);
