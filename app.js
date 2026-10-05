@@ -571,13 +571,65 @@ function findClosestAirport(lat, lon, maxDistKm = 140) {
   return best;
 }
 
-function selectAirport(apt) {
+let airportRequestId = 0;
+
+function closeAirportDrawer() {
+  const drawer = $("airportDrawer");
+  if (drawer) drawer.classList.add("hidden");
+  const camPlayer = $("airportCamPlayer");
+  if (camPlayer) camPlayer.innerHTML = "";
+  state.activeAirport = null;
+  state.currentAirportCam = null;
+  updateGlobePoints(true);
+}
+
+function setAirportMediaTab(tab) {
+  const tabPhoto = $("tabAirportPhoto");
+  const tabCam = $("tabAirportCam");
+  const wrapPhoto = $("airportPhotoWrapper");
+  const wrapCam = $("airportCamWrapper");
+
+  if (tab === "cam") {
+    tabCam?.classList.add("active");
+    tabPhoto?.classList.remove("active");
+    wrapPhoto?.classList.add("hidden");
+    wrapCam?.classList.remove("hidden");
+
+    const camPlayer = $("airportCamPlayer");
+    if (camPlayer && !camPlayer.hasChildNodes() && state.currentAirportCam) {
+      renderAirportCamPlayer(state.currentAirportCam);
+    }
+  } else {
+    tabPhoto?.classList.add("active");
+    tabCam?.classList.remove("active");
+    wrapPhoto?.classList.remove("hidden");
+    wrapCam?.classList.add("hidden");
+  }
+}
+
+function renderAirportCamPlayer(cam) {
+  const camPlayer = $("airportCamPlayer");
+  if (!camPlayer || !cam) return;
+  const embed = cam.embedUrl || (cam.youtubeId ? `https://www.youtube.com/embed/${cam.youtubeId}?autoplay=1&mute=1` : null);
+  if (embed) {
+    camPlayer.innerHTML = `<iframe src="${embed}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;border-radius:10px;"></iframe>`;
+  } else if (cam.streamUrl) {
+    camPlayer.innerHTML = `<video src="${cam.streamUrl}" controls autoplay muted playsinline style="width:100%;height:100%;border-radius:10px;object-fit:cover;"></video>`;
+  } else {
+    camPlayer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:12px;">Transmissão ao vivo temporariamente indisponível</div>`;
+  }
+}
+
+async function selectAirport(apt) {
   if (!apt) return;
   state.activeAirport = apt;
   const aLat = apt.lat;
   const aLng = apt.lon;
-  state.globe.pointOfView({ lat: aLat, lng: aLng, altitude: 0.85 }, 1200);
 
+  // Enquadra a câmera no globo com perspectiva ideal
+  state.globe.pointOfView({ lat: aLat, lng: aLng, altitude: 0.65 }, 1200);
+
+  // Sincroniza tema e retículo de sintonia para a cor roxo neon de aeroportos
   updateReticleTheme("airport");
   const reticle = $("tuningReticle");
   const reticleLabel = $("reticleLabel");
@@ -585,14 +637,195 @@ function selectAirport(apt) {
     reticle.classList.remove("searching");
     reticle.classList.add("locked");
   }
-  const iataBadge = apt.iata ? `[${apt.iata}] ` : '';
+  const iataBadge = apt.iata ? `[${apt.iata}] ` : "";
   const loc = [apt.city, apt.country].filter(Boolean).join(", ");
   if (reticleLabel) {
     reticleLabel.textContent = `✈️ ${iataBadge}${apt.name} · ${loc}`;
   }
   updateGlobePoints(true);
-  const elevInfo = apt.elev != null ? ` · Elev: ${apt.elev} ft` : '';
-  showToast(`✈️ ${iataBadge}${apt.name} — ${loc}${elevInfo}`);
+
+  // Fecha gavetas concorrentes
+  $("stationDrawer")?.classList.add("hidden");
+  $("weatherForecastCard")?.classList.add("hidden");
+
+  // Abre e popula o drawer imediatamente com dados já em cache local
+  const drawer = $("airportDrawer");
+  if (drawer) drawer.classList.remove("hidden");
+
+  const typeBadge = $("airportTypeBadge");
+  const iataBadgeEl = $("airportIataBadge");
+  const icaoBadgeEl = $("airportIcaoBadge");
+  const nameEl = $("airportName");
+  const locEl = $("airportLocation");
+  const elevEl = $("airportElev");
+  const coordsEl = $("airportCoords");
+  const tempEl = $("airportTemp");
+  const windEl = $("airportWind");
+  const extractEl = $("airportExtract");
+  const tabCam = $("tabAirportCam");
+  const camsListGroup = $("airportCamsListGroup");
+  const camPlayer = $("airportCamPlayer");
+
+  if (typeBadge) typeBadge.textContent = (apt.type || "AEROPORTO").toUpperCase();
+  if (iataBadgeEl) iataBadgeEl.textContent = apt.iata || "---";
+  if (icaoBadgeEl) icaoBadgeEl.textContent = apt.icao || "----";
+  if (nameEl) nameEl.textContent = apt.name || "Aeroporto";
+  if (locEl) locEl.textContent = loc || "Localização Global";
+  if (elevEl) elevEl.textContent = apt.elev != null ? `${apt.elev} ft` : "-- ft";
+  if (coordsEl) coordsEl.textContent = `${apt.lat.toFixed(3)}°, ${apt.lon.toFixed(3)}°`;
+  if (tempEl) tempEl.textContent = "--°C";
+  if (windEl) windEl.textContent = "-- kt";
+  if (extractEl) extractEl.textContent = "Consultando informações aeronáuticas, meteorologia e transmissões ao vivo...";
+
+  // Reseta abas de mídia para Foto Aérea inicialmente
+  setAirportMediaTab("photo");
+  tabCam?.classList.add("hidden");
+  camsListGroup?.classList.add("hidden");
+  if (camPlayer) camPlayer.innerHTML = "";
+  state.currentAirportCam = null;
+
+  // Estado de carregamento da foto
+  const photoImg = $("airportPhoto");
+  const photoFallback = $("airportPhotoFallback");
+  const photoCaption = $("airportPhotoCaption");
+  if (photoImg) {
+    photoImg.classList.add("hidden");
+    photoImg.src = "";
+  }
+  if (photoFallback) {
+    photoFallback.classList.remove("hidden");
+    const fbText = $("airportFallbackText");
+    if (fbText) fbText.textContent = `Carregando imagem de ${apt.name}...`;
+  }
+  if (photoCaption) photoCaption.textContent = "Wikimedia Commons";
+
+  // Links preliminares imediatos
+  const fr24Btn = $("airportFlightradarBtn");
+  if (fr24Btn) {
+    fr24Btn.href = `https://www.flightradar24.com/${apt.lat.toFixed(4)},${apt.lon.toFixed(4)}/12`;
+  }
+  const wikiBtn = $("airportWikiBtn");
+  if (wikiBtn) {
+    wikiBtn.href = `https://pt.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(apt.name)}`;
+  }
+
+  showToast(`✈️ ${iataBadge}${apt.name} selecionado`);
+
+  // Requisição detalhada assíncrona com ID de controle de concorrência
+  const currentReqId = ++airportRequestId;
+  try {
+    const query = new URLSearchParams({
+      id: apt.id || "",
+      iata: apt.iata || "",
+      lat: String(apt.lat),
+      lon: String(apt.lon),
+      name: apt.name || ""
+    });
+    const res = await request(`/api/airport/detail?${query.toString()}`);
+    if (currentReqId !== airportRequestId || !res) return;
+
+    // 1. Dados enciclopédicos da Wikipédia e Foto em alta definição
+    if (res.wiki) {
+      const photoUrl = typeof res.wiki.photo === "string" ? res.wiki.photo : res.wiki.photo?.url;
+      if (photoUrl) {
+        if (photoImg) {
+          photoImg.src = photoUrl;
+          photoImg.alt = res.wiki.title || apt.name;
+          photoImg.classList.remove("hidden");
+        }
+        if (photoFallback) photoFallback.classList.add("hidden");
+        if (photoCaption) photoCaption.textContent = res.wiki.title || "Wikimedia Commons";
+      } else {
+        if (photoFallback) {
+          photoFallback.classList.remove("hidden");
+          const fbText = $("airportFallbackText");
+          if (fbText) fbText.textContent = `${apt.name} · Vista Aérea Global`;
+        }
+      }
+
+      if (res.wiki.extract && extractEl) {
+        extractEl.textContent = res.wiki.extract;
+      } else if (extractEl) {
+        extractEl.textContent = "Aeroporto em operação comercial com pistas homologadas e conexões internacionais.";
+      }
+
+      if (wikiBtn && res.wiki.wikiUrl) {
+        wikiBtn.href = res.wiki.wikiUrl;
+      }
+    }
+
+    // 2. Meteorologia Aeronáutica em Tempo Real (Ventos em Nós 'kt' e Temperatura)
+    if (res.weather) {
+      if (tempEl && res.weather.temp != null) tempEl.textContent = `${res.weather.temp}°C`;
+      const windKt = res.weather.windKnots != null ? res.weather.windKnots : (res.weather.windKt != null ? res.weather.windKt : null);
+      const windKmh = res.weather.windKmh != null ? res.weather.windKmh : null;
+      const windDir = res.weather.windDirection != null ? `${res.weather.windDirection}°` : (res.weather.windDir || "");
+      if (windEl && windKt != null) {
+        windEl.textContent = `${windKt} kt (${windKmh || Math.round(windKt * 1.852)} km/h ${windDir})`.trim();
+      }
+    }
+
+    // 3. Webcams ao Vivo e Transmissões Próximas
+    const cams = Array.isArray(res.webcams) ? res.webcams : (res.webcams?.primary ? [res.webcams.primary, ...(res.webcams.others || [])] : []);
+    if (cams.length > 0) {
+      const primaryCam = cams[0];
+      state.currentAirportCam = primaryCam;
+      tabCam?.classList.remove("hidden");
+      const camTitle = $("airportCamTitle");
+      const camDist = $("airportCamDist");
+      if (camTitle) camTitle.textContent = primaryCam.name || primaryCam.title || "Câmera ao vivo";
+      if (camDist) {
+        camDist.textContent = primaryCam.isDirectAirportCam
+          ? "🔴 Ao vivo das pistas / aeródromo"
+          : `Distância: ~${primaryCam.distanceKm || 0} km`;
+      }
+
+      // Aba de webcam fica destacada e pronta para alternar
+      tabCam?.classList.remove("hidden");
+
+      // Lista de câmeras adicionais na região
+      if (cams.length > 1) {
+        const others = cams.slice(1, 5);
+        const listEl = $("airportCamsList");
+        if (listEl) {
+          listEl.innerHTML = others.map((cam) => `
+            <button class="airport-cam-chip" data-cam-id="${escapeHtml(cam.id)}">
+              <span class="chip-live-dot"></span>
+              <div class="chip-info">
+                <strong>${escapeHtml(cam.name || cam.title)}</strong>
+                <small>${cam.isDirectAirportCam ? "🔴 Aeroporto" : `~${cam.distanceKm || 0} km de distância`}</small>
+              </div>
+              <span class="chip-play-icon">▶</span>
+            </button>
+          `).join("");
+
+          listEl.querySelectorAll("[data-cam-id]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const chosen = others.find((c) => c.id === btn.dataset.camId);
+              if (chosen) {
+                state.currentAirportCam = chosen;
+                const cTitle = $("airportCamTitle");
+                const cDist = $("airportCamDist");
+                if (cTitle) cTitle.textContent = chosen.name || chosen.title;
+                if (cDist) cDist.textContent = chosen.isDirectAirportCam ? "🔴 Ao vivo do aeroporto" : `Distância: ~${chosen.distanceKm || 0} km`;
+                renderAirportCamPlayer(chosen);
+                setAirportMediaTab("cam");
+              }
+            });
+          });
+
+          camsListGroup?.classList.remove("hidden");
+        }
+      }
+    }
+
+    // 4. Links de Rastreamento de Voos (FlightRadar24)
+    if (res.links && res.links.flightradar24 && fr24Btn) {
+      fr24Btn.href = res.links.flightradar24;
+    }
+  } catch (err) {
+    console.warn("Falha ao obter dados detalhados do aeroporto:", err);
+  }
 }
 
 // INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
@@ -4008,11 +4241,18 @@ function setupEvents() {
       setSearchOpen(true);
       return;
     }
-    if (!$("searchBackdrop").classList.contains("hidden")) {
-      if (e.key === "Escape") {
+    if (e.key === "Escape") {
+      const aptDrawer = $("airportDrawer");
+      if (aptDrawer && !aptDrawer.classList.contains("hidden")) {
+        closeAirportDrawer();
+        return;
+      }
+      if (!$("searchBackdrop").classList.contains("hidden")) {
         setSearchOpen(false);
         return;
       }
+    }
+    if (!$("searchBackdrop").classList.contains("hidden")) {
       if (e.key === "ArrowDown" && state.searchItems.length) {
         e.preventDefault();
         state.searchIndex = (state.searchIndex + 1) % state.searchItems.length;
@@ -4065,6 +4305,29 @@ function setupEvents() {
 
   // Camada de Aeroportos do Mundo (ArcGIS)
   $("btnAirports")?.addEventListener("click", () => toggleAirports());
+
+  // Painel e Card Informativo do Aeroporto (Fotos Wikipédia, Webcams, Meteorologia, Ações)
+  $("closeAirportDrawer")?.addEventListener("click", closeAirportDrawer);
+  $("tabAirportPhoto")?.addEventListener("click", () => setAirportMediaTab("photo"));
+  $("tabAirportCam")?.addEventListener("click", () => setAirportMediaTab("cam"));
+  $("airportFocusRunwayBtn")?.addEventListener("click", () => {
+    if (!state.activeAirport) return;
+    const { lat, lon, name } = state.activeAirport;
+    state.globe.pointOfView({ lat, lng: lon, altitude: 0.008 }, 1400);
+    showToast(`🛰️ Pistas de ${name} aproximadas em Satélite 3D`);
+  });
+  $("airportTuneRadioBtn")?.addEventListener("click", () => {
+    if (!state.activeAirport) return;
+    const { lat, lon, name } = state.activeAirport;
+    const place = findClosestRadioGardenPlace(lat, lon, 450);
+    if (place) {
+      selectCity(place.id);
+      openStationDrawer();
+      showToast(`📻 Sintonizando rádios locais em ${place.title || place.name || name}...`);
+    } else {
+      showToast(`📻 Nenhuma rádio local indexada nas proximidades de ${name}.`);
+    }
+  });
 
   // Radar e Mapa de Ventos Windy em Tela Cheia
   $("btnWindMap")?.addEventListener("click", () => toggleWindyMap());
@@ -4469,6 +4732,7 @@ async function start() {
   window.state = state;
   window.toggleAirports = toggleAirports;
   window.selectAirport = selectAirport;
+  window.closeAirportDrawer = closeAirportDrawer;
   window.applyMapTilerGlobe = applyMapTilerGlobe;
   window.setMapTilerKey = (key, style = "hybrid-v4") => {
     if (key) {

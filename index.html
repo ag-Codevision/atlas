@@ -521,6 +521,101 @@
       <button class="load-more hidden" id="loadMore">Carregar mais estações <span>↓</span></button>
     </section>
 
+    <!-- PAINEL E CARD DE INFORMAÇÕES DO AEROPORTO -->
+    <aside class="airport-drawer hidden" id="airportDrawer" aria-label="Painel informativo do aeroporto">
+      <div class="airport-drawer-header">
+        <div class="airport-header-meta">
+          <span class="airport-type-badge" id="airportTypeBadge">AEROPORTO</span>
+          <span class="airport-iata-badge" id="airportIataBadge">---</span>
+          <span class="airport-icao-badge" id="airportIcaoBadge">----</span>
+        </div>
+        <button class="icon-button airport-close-btn" id="closeAirportDrawer" aria-label="Fechar painel do aeroporto">×</button>
+      </div>
+
+      <div class="airport-drawer-body">
+        <!-- Título e Localização -->
+        <div class="airport-title-group">
+          <h2 id="airportName" class="airport-name">Nome do Aeroporto</h2>
+          <div class="airport-location" id="airportLocation">Cidade, País</div>
+        </div>
+
+        <!-- Mídia do Aeroporto: Foto da Wikipédia ou Webcam ao Vivo -->
+        <div class="airport-media-container" id="airportMediaContainer">
+          <div class="airport-media-tabs" id="airportMediaTabs">
+            <button class="airport-media-tab active" id="tabAirportPhoto" data-tab="photo">FOTO AÉREA</button>
+            <button class="airport-media-tab hidden" id="tabAirportCam" data-tab="cam">
+              <span class="cam-live-dot"></span> WEBCAM AO VIVO
+            </button>
+          </div>
+
+          <div class="airport-photo-wrapper" id="airportPhotoWrapper">
+            <img id="airportPhoto" class="airport-photo" alt="Foto do aeroporto" />
+            <div id="airportPhotoFallback" class="airport-photo-fallback hidden">
+              <div class="airport-fallback-icon">✈️</div>
+              <span id="airportFallbackText">Visão Global do Aeroporto</span>
+            </div>
+            <div class="airport-photo-caption" id="airportPhotoCaption">Wikimedia Commons</div>
+          </div>
+
+          <div class="airport-cam-wrapper hidden" id="airportCamWrapper">
+            <div class="airport-cam-player" id="airportCamPlayer"></div>
+            <div class="airport-cam-info">
+              <span class="airport-cam-title" id="airportCamTitle">Câmera ao vivo</span>
+              <span class="airport-cam-dist" id="airportCamDist"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Métricas Rápidas (Elevação, Coordenadas, Vento, Temperatura) -->
+        <div class="airport-stats-grid">
+          <div class="airport-stat-card">
+            <span class="stat-label">ALTITUDE / ELEVAÇÃO</span>
+            <strong class="stat-value" id="airportElev">-- ft</strong>
+          </div>
+          <div class="airport-stat-card">
+            <span class="stat-label">COORDENADAS</span>
+            <strong class="stat-value" id="airportCoords">--° , --°</strong>
+          </div>
+          <div class="airport-stat-card">
+            <span class="stat-label">TEMPERATURA</span>
+            <strong class="stat-value" id="airportTemp">--°C</strong>
+          </div>
+          <div class="airport-stat-card">
+            <span class="stat-label">VENTO AERONÁUTICO</span>
+            <strong class="stat-value" id="airportWind">-- kt</strong>
+          </div>
+        </div>
+
+        <!-- Resumo da Wikipédia -->
+        <div class="airport-extract-card" id="airportExtractCard">
+          <div class="airport-section-title">SOBRE O AEROPORTO</div>
+          <p class="airport-extract-text" id="airportExtract">Carregando dados da enciclopédia aeronáutica...</p>
+        </div>
+
+        <!-- Câmeras adicionais próximas -->
+        <div class="airport-cams-list-group hidden" id="airportCamsListGroup">
+          <div class="airport-section-title">TRANSMISSÕES AO VIVO NA REGIÃO</div>
+          <div class="airport-cams-list" id="airportCamsList"></div>
+        </div>
+
+        <!-- Botões de Ação Úteis -->
+        <div class="airport-actions-grid">
+          <button class="airport-action-btn primary" id="airportFocusRunwayBtn" title="Aproximar zoom nas pistas do aeroporto">
+            <span>🛰️ Focar Pistas em Satélite 3D</span>
+          </button>
+          <a class="airport-action-btn" id="airportFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Ver voos decolando e pousando no FlightRadar24">
+            <span>✈️ Rastrear Voos (FlightRadar24) ↗</span>
+          </a>
+          <button class="airport-action-btn" id="airportTuneRadioBtn" title="Ouvir rádios locais da cidade do aeroporto">
+            <span>📻 Sintonizar Rádios da Região</span>
+          </button>
+          <a class="airport-action-btn secondary" id="airportWikiBtn" target="_blank" rel="noopener noreferrer" title="Abrir artigo na Wikipédia">
+            <span>📖 Ver na Wikipédia ↗</span>
+          </a>
+        </div>
+      </div>
+    </aside>
+
     <!-- 19. MINI LIVE PLAYER FLUTUANTE (PICTURE-IN-PICTURE IN-APP) -->
     <aside class="mini-player hidden" id="miniPlayer" aria-label="Mini player de câmera flutuante">
       <div class="mini-frame" id="miniFrame"></div>

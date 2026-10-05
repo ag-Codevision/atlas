@@ -136,6 +136,13 @@ async function findAirportWebcams(lat, lon, iata, name, maxKm = 65) {
     const airportRegex = /(?:airport|aeroporto|airfield|runway|airstrip|aviation|aerodrom)/i;
     const iataRegex = iata && iata.length >= 3 ? new RegExp(`\\b${iata}\\b`, 'i') : null;
 
+    const nameWords = (name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .split(/[\s\/\-_,]+/)
+      .filter(w => w.length >= 4 && !['aeroporto', 'airport', 'internacional', 'international', 'nacional', 'national'].includes(w));
+
     for (const c of allWebcams) {
       const cLat = c.latitude != null ? c.latitude : c.lat;
       const cLon = c.longitude != null ? c.longitude : c.lon;
@@ -143,7 +150,19 @@ async function findAirportWebcams(lat, lon, iata, name, maxKm = 65) {
       const dist = distanceKm(lat, lon, cLat, cLon);
       if (dist <= maxKm) {
         const title = c.name || c.title || '';
-        const isDirectAirportCam = airportRegex.test(title) || (iataRegex && iataRegex.test(title));
+        const normTitle = title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const hasExactNameMatch = (iataRegex && iataRegex.test(title)) || (nameWords.length > 0 && nameWords.some(w => normTitle.includes(w)));
+        const isGenericAirportCam = airportRegex.test(title);
+
+        let priority = 0;
+        if (hasExactNameMatch) {
+          priority = 3; // Correspondência exata do aeroporto
+        } else if (isGenericAirportCam && dist <= 30) {
+          priority = 2; // Câmera de aeródromo muito próxima
+        } else if (isGenericAirportCam) {
+          priority = 1;
+        }
+
         matches.push({
           id: c.id,
           name: title,
@@ -154,14 +173,14 @@ async function findAirportWebcams(lat, lon, iata, name, maxKm = 65) {
           embedUrl: c.embedUrl || '',
           streamUrl: c.streamUrl || '',
           distanceKm: Math.round(dist * 10) / 10,
-          isDirectAirportCam: Boolean(isDirectAirportCam)
+          isDirectAirportCam: Boolean(hasExactNameMatch || (isGenericAirportCam && dist <= 25)),
+          priority
         });
       }
     }
 
     matches.sort((a, b) => {
-      if (a.isDirectAirportCam && !b.isDirectAirportCam) return -1;
-      if (!a.isDirectAirportCam && b.isDirectAirportCam) return 1;
+      if (b.priority !== a.priority) return b.priority - a.priority;
       return a.distanceKm - b.distanceKm;
     });
 
