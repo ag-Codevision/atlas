@@ -151,7 +151,16 @@ async function fetchWikiAirport(apt) {
         const mentionsTarget = (apt.city && text.includes(apt.city.toLowerCase())) ||
                                (cleanName && text.includes(cleanName.toLowerCase())) ||
                                (apt.iata && text.includes(apt.iata.toLowerCase()));
-        return airportKeywords.test(text) && mentionsTarget && !text.includes('pode referir-se a') && !text.includes('desambiguação');
+        const isDisambig = text.includes('pode referir-se a') || text.includes('desambiguação');
+        if (isDisambig) return false;
+
+        // Se o aeroporto for brasileiro, não deve aceitar artigo de nação estrangeira homônima (ex: Podgoritza / país Montenegro)
+        if (apt.country === 'BR') {
+          const isForeignCountry = text.includes('capital de montenegro') || text.includes('podgorica') || text.includes('podgoritza') || text.includes('bálcãs') || text.includes('república de montenegro');
+          if (isForeignCountry) return false;
+        }
+
+        return airportKeywords.test(text) && mentionsTarget;
       });
 
       if (match) {
@@ -166,6 +175,12 @@ async function fetchWikiAirport(apt) {
           const mentionsTarget = (apt.city && sumText.includes(apt.city.toLowerCase())) ||
                                  (cleanName && sumText.includes(cleanName.toLowerCase())) ||
                                  (apt.iata && sumText.includes(apt.iata.toLowerCase()));
+
+          if (apt.country === 'BR') {
+            const isForeignCountry = sumText.includes('capital de montenegro') || sumText.includes('podgorica') || sumText.includes('podgoritza') || sumText.includes('bálcãs') || sumText.includes('república de montenegro');
+            if (isForeignCountry) continue;
+          }
+
           if (sum.extract && airportKeywords.test(sum.extract) && mentionsTarget && sum.type !== 'disambiguation') {
             const photo = sum.originalimage?.source || sum.thumbnail?.source || null;
             wikiHit = {

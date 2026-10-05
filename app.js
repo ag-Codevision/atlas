@@ -813,11 +813,15 @@ async function selectAirport(apt) {
         const listEl = $("airportCamsList");
         if (listEl) {
           listEl.innerHTML = others.map((cam) => `
-            <button class="airport-cam-chip" data-cam-id="${escapeHtml(cam.id)}">
-              <span class="chip-live-dot"></span>
-              <div class="chip-info">
-                <strong>${escapeHtml(cam.name || cam.title)}</strong>
-                <small>${cam.isDirectAirportCam ? "🔴 Aeroporto" : `~${cam.distanceKm || 0} km de distância`}</small>
+            <button class="airport-cam-chip" data-cam-id="${escapeHtml(cam.id)}" title="Conectar à transmissão: ${escapeHtml(cam.name || cam.title)}">
+              <div class="chip-main">
+                <span class="chip-live-dot"></span>
+                <div class="chip-info">
+                  <strong class="chip-title">${escapeHtml(cam.name || cam.title)}</strong>
+                  <div class="chip-sub">
+                    ${cam.isDirectAirportCam ? '<span class="chip-badge-airport">✈️ Ao vivo do aeródromo</span>' : `<span>Distância: ~${cam.distanceKm || 0} km</span>`}
+                  </div>
+                </div>
               </div>
               <span class="chip-play-icon">▶</span>
             </button>
