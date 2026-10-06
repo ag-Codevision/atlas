@@ -2,7 +2,9 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "includeFiles": "data/**,shared/**,lib/**"
+      "includeFiles": "data/**,shared/**,lib/**",
+      "maxDuration": 15,
+      "memory": 1024
     }
   },
   "rewrites": [

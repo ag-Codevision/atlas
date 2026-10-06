@@ -45,10 +45,54 @@ publicFiles.set('/data/radio-garden-places.json','data/radio-garden-places.json'
 publicFiles.set('/data/tvgarden-webcams.json','data/tvgarden-webcams.json');
 publicFiles.set('/data/tvgarden-tv.json','data/tvgarden-tv.json');
 publicFiles.set('/data/tvgarden-country-coords.json','data/tvgarden-country-coords.json');
+publicFiles.set('/data/live-flights-seed.json','data/live-flights-seed.json');
 publicFiles.set('/shared/airports.json','shared/airports.json');
 let cachedAirports = null;
 let cachedLiveFlights = { time: 0, states: [] };
 let liveFlightFetchPromise = null;
+let seedLiveFlightsData = null;
+
+async function getSeedLiveFlights() {
+  if (!seedLiveFlightsData) {
+    try {
+      const content = await readFile(resolve(ROOT, 'data/live-flights-seed.json'), 'utf8');
+      seedLiveFlightsData = JSON.parse(content);
+    } catch (err) {
+      console.warn('Não foi possível ler data/live-flights-seed.json:', err.message);
+    }
+  }
+  return seedLiveFlightsData;
+}
+
+function projectSeedFlights(seed) {
+  if (!seed || !Array.isArray(seed.states) || seed.states.length === 0) return [];
+  const baseTime = seed.time || Date.now();
+  const elapsedSec = Math.max(0, (Date.now() - baseTime) / 1000) % 7200;
+
+  return seed.states.map(s => {
+    const lat0 = s[6];
+    const lon0 = s[5];
+    const spd = s[9] || 220;
+    const track = s[10] || 0;
+
+    const distM = spd * elapsedSec;
+    const rad = track * (Math.PI / 180);
+
+    const dLat = (distM * Math.cos(rad)) / 111320;
+    let lat = lat0 + dLat;
+    lat = Math.max(-85, Math.min(85, lat));
+
+    const cosLat = Math.cos(lat * (Math.PI / 180)) || 1;
+    const dLon = (distM * Math.sin(rad)) / (111320 * Math.abs(cosLat));
+    let lon = lon0 + dLon;
+    lon = ((lon + 180) % 360 + 360) % 360 - 180;
+
+    const clone = [...s];
+    clone[5] = Math.round(lon * 1000) / 1000;
+    clone[6] = Math.round(lat * 1000) / 1000;
+    return clone;
+  });
+}
 
 async function fetchLiveFlights() {
   const now = Date.now();
@@ -61,22 +105,38 @@ async function fetchLiveFlights() {
     try {
       const resp = await fetch('https://opensky-network.org/api/states/all', {
         headers: { 'User-Agent': 'Orbita-GlobalSyncro/1.0' },
-        signal: AbortSignal.timeout(9000)
+        signal: AbortSignal.timeout(5000)
       });
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data.states)) {
           const valid = data.states.filter(s => s[5] != null && s[6] != null && !s[8]);
-          cachedLiveFlights = { time: Date.now(), states: valid };
-          return valid;
+          if (valid.length > 0) {
+            cachedLiveFlights = { time: Date.now(), states: valid };
+            return valid;
+          }
         }
       }
     } catch {
-      // Fallback gracioso mantendo o cache mais recente
+      // Falha externa ou timeout tratada via fallback abaixo
     } finally {
       liveFlightFetchPromise = null;
     }
-    return cachedLiveFlights.states;
+
+    // Se temos cache anterior com voos, mantém
+    if (cachedLiveFlights.states.length > 0) {
+      return cachedLiveFlights.states;
+    }
+
+    // Fallback garantido: carrega o snapshot de voos reais com Dead Reckoning temporal
+    const seed = await getSeedLiveFlights();
+    if (seed && Array.isArray(seed.states)) {
+      const projected = projectSeedFlights(seed);
+      cachedLiveFlights = { time: Date.now(), states: projected };
+      return projected;
+    }
+
+    return [];
   })();
 
   return liveFlightFetchPromise;
@@ -98,7 +158,10 @@ function country(params) {
   return value;
 }
 function rateAllowed(req) {
-  const now=Date.now(), ip=req.socket.remoteAddress||'local';
+  const ip = (req.headers && req.headers['x-forwarded-for'])
+    ? req.headers['x-forwarded-for'].split(',')[0].trim()
+    : (req.socket && req.socket.remoteAddress) || 'local';
+  const now = Date.now();
   for (const [key,value] of requests) if (now-value.start>60000) requests.delete(key);
   const bucket=requests.get(ip)||{start:now,count:0}; bucket.count++; requests.set(ip,bucket);
   return bucket.count<=180;
@@ -736,6 +799,8 @@ export async function api(req,res,url) {
         count: flights.length,
         totalInAir: states.length,
         flights
+      }, {
+        'cache-control': 'public, max-age=10, s-maxage=12, stale-while-revalidate=30'
       });
     } catch (err) {
       return json(res, 500, { error: 'Falha ao buscar voos em tempo real: ' + err.message });

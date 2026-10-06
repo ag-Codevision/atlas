@@ -939,16 +939,56 @@ async function fetchLiveFlightsData() {
   if (!state.flightsVisible) return;
   try {
     const res = await request("/api/flights/live?limit=650");
-    if (res && Array.isArray(res.flights)) {
+    if (res && Array.isArray(res.flights) && res.flights.length > 0) {
       state.flights = res.flights;
       const countLabel = $("flightsBtnLabel");
       if (countLabel) {
         countLabel.textContent = `VOOS (${res.count})`;
       }
       updateGlobePoints(true);
+      return;
     }
   } catch (err) {
-    console.warn("Falha ao atualizar voos em tempo real:", err);
+    console.warn("Falha ao atualizar voos em tempo real via API:", err);
+  }
+
+  // Fallback garantido para produção: carrega snapshot real de voos caso a API esteja temporariamente indisponível
+  if (state.flightsVisible && (!state.flights || state.flights.length === 0)) {
+    try {
+      const respSeed = await fetch("/data/live-flights-seed.json");
+      if (respSeed.ok) {
+        const seedData = await respSeed.json();
+        if (Array.isArray(seedData.states)) {
+          const limit = 650;
+          const step = Math.max(1, Math.floor(seedData.states.length / limit));
+          const sampled = [];
+          for (let i = 0; i < seedData.states.length && sampled.length < limit; i += step) {
+            sampled.push(seedData.states[i]);
+          }
+          const flights = sampled.map(s => ({
+            icao: s[0],
+            callsign: (s[1] || '').trim(),
+            country: s[2] || '',
+            lng: Math.round(s[5] * 1000) / 1000,
+            lat: Math.round(s[6] * 1000) / 1000,
+            alt: Math.round(s[7] || 0),
+            altFt: Math.round((s[7] || 0) * 3.28084),
+            speed: Math.round((s[9] || 0) * 3.6),
+            speedKnots: Math.round((s[9] || 0) * 1.94384),
+            track: Math.round(s[10] || 0),
+            type: 'flight'
+          }));
+          state.flights = flights;
+          const countLabel = $("flightsBtnLabel");
+          if (countLabel) {
+            countLabel.textContent = `VOOS (${flights.length})`;
+          }
+          updateGlobePoints(true);
+        }
+      }
+    } catch (seedErr) {
+      console.warn("Falha ao carregar dados de voos:", seedErr);
+    }
   }
 }
 
