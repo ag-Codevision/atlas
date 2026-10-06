@@ -510,7 +510,7 @@ function renderWeather() {
       badge.className = `atmosphere-badge ${atmosphere.type}`;
       if (iconSpan) iconSpan.textContent = atmosphere.icon;
       if (labelSpan) labelSpan.textContent = atmosphere.label;
-      badge.title = `Condição estimada em ${cityName(city)}. Clique para carregar a previsão Windy.`;
+      badge.title = `Condição estimada em ${cityName(city)}. Clique para carregar a previsão detalhada.`;
     }
   }
 }
@@ -526,7 +526,7 @@ function toggleWeatherCard(force) {
   }
 }
 
-// CAMADA OFICIAL DE AEROPORTOS DO MUNDO (ARCGIS WORLD AIRPORTS)
+// CAMADA OFICIAL DE AEROPORTOS DO MUNDO
 async function loadAirports() {
   if (state.airports && state.airports.length > 0) return state.airports;
   try {
@@ -550,7 +550,7 @@ async function toggleAirports(force) {
   legend?.classList.toggle("hidden", !shouldShow);
 
   if (shouldShow && (!state.airports || state.airports.length === 0)) {
-    showToast("✈️ Carregando aeroportos mundiais (ArcGIS)...");
+    showToast("✈️ Carregando aeroportos mundiais...");
     await loadAirports();
   }
 
@@ -784,7 +784,7 @@ async function selectAirport(apt) {
         photoImg.classList.remove("hidden");
       }
       if (photoFallback) photoFallback.classList.add("hidden");
-      if (photoCaption) photoCaption.textContent = res.wiki?.title || "Wikimedia Commons";
+      if (photoCaption) photoCaption.textContent = res.wiki?.title || "Foto Aérea";
       photoWrapper?.classList.remove("hidden");
       tabPhoto?.classList.remove("hidden");
       setAirportMediaTab("photo");
@@ -919,7 +919,7 @@ async function toggleLiveFlights(force) {
   legend?.classList.toggle("hidden", !shouldShow);
 
   if (shouldShow) {
-    showToast("🛫 Carregando voos mundiais ao vivo (OpenSky Network)...");
+    showToast("🛫 Carregando voos em tempo real...");
     await fetchLiveFlightsData();
     clearInterval(flightPollingTimer);
     flightPollingTimer = setInterval(fetchLiveFlightsData, 16000);
@@ -993,7 +993,7 @@ function selectFlight(flight) {
     airnavBtn.href = flight.callsign
       ? `https://pt.airnavradar.com/flight/${encodeURIComponent(flight.callsign)}`
       : `https://pt.airnavradar.com/@${flight.lat.toFixed(4)},${flight.lng.toFixed(4)},z11`;
-    airnavBtn.title = `Rastrear telemetria de ${cs} no AirNav Radar`;
+    airnavBtn.title = `Rastrear telemetria de ${cs} no radar aéreo`;
   }
 
   showToast(`✈️ Aeronave ${cs} (${flight.country || ""}) em voo`);
@@ -1005,7 +1005,7 @@ function closeFlightDrawer() {
   state.activeFlight = null;
 }
 
-// INTEGRAÇÃO AIRNAV RADAR (MODAL GLOBAL & SINCRONIZAÇÃO COM GLOBO)
+// INTEGRAÇÃO DE RADAR AÉREO (MODAL GLOBAL & SINCRONIZAÇÃO COM GLOBO)
 function toggleAirNavModal(force, targetLat, targetLon, zoom) {
   const modal = $("airnavModalBackdrop");
   const btn = $("btnAirNavRadar");
@@ -1048,7 +1048,7 @@ function toggleAirNavModal(force, targetLat, targetLon, zoom) {
     }
 
     syncAirNavWithCoords(lat, lon, z);
-    showToast("📡 AirNav Radar: Tráfego aéreo ao vivo carregado");
+    showToast("📡 Radar Aéreo: Tráfego ao vivo carregado");
   }
 }
 
@@ -1063,7 +1063,7 @@ function syncAirNavWithCoords(lat, lon, zoom = 7) {
   if (extBtn) extBtn.href = url;
   if (launchBtn) {
     launchBtn.href = url;
-    launchBtn.title = `Abrir radar em ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° no AirNav Radar`;
+    launchBtn.title = `Abrir radar em ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° em tela cheia`;
   }
   if (statusEl) {
     statusEl.textContent = `Coordenadas: ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° (Zoom ${zoom})`;
@@ -1150,7 +1150,7 @@ function updateWindyMap() {
   let iframe = wrapper.querySelector("iframe");
   if (!iframe) {
     iframe = document.createElement("iframe");
-    iframe.title = "Mapa de Previsão e Ventos Windy";
+    iframe.title = "Mapa de Previsão e Ventos em Tempo Real";
     iframe.allow = "fullscreen";
     iframe.referrerPolicy = "strict-origin-when-cross-origin";
     wrapper.appendChild(iframe);
@@ -1880,7 +1880,7 @@ function openTvDrawer() {
   const countryName = state.camera?.country || state.city?.country || "Região";
   const count = state.tvChannels?.length || 0;
   $("drawerTitle").textContent = `Canais de TV em ${countryName}`;
-  $("drawerEyebrow").textContent = `TV GARDEN · ${count > 0 ? count + ' CANAIS' : 'CANAIS AO VIVO'}`;
+  $("drawerEyebrow").textContent = `${count > 0 ? count + ' CANAIS DISPONÍVEIS' : 'CANAIS AO VIVO'}`;
   $("drawerSummary").textContent = count > 0 
     ? `${count} canais de televisão ao vivo disponíveis em ${countryName}`
     : `Buscando emissoras de TV ao vivo...`;
@@ -2079,8 +2079,8 @@ function setCamera(camera) {
     $("cameraContextName").textContent = camera.name;
     $("cameraTitle").textContent = camera.name;
     $("cameraLocation").textContent = [camera.country || state.city.country, "TV Aberta & Cabo · Ao Vivo"].filter(Boolean).join(" · ");
-    if ($("cameraSource")) $("cameraSource").href = safeUrl(camera.streamUrl || camera.embedUrl) || "https://tvgarden.world/tv";
-    $("cameraProvider").textContent = "TV GARDEN · CANAL AO VIVO";
+    if ($("cameraSource")) $("cameraSource").href = safeUrl(camera.streamUrl || camera.embedUrl) || "#";
+    $("cameraProvider").textContent = "CANAL DE TV AO VIVO";
   } else {
     $("heroEyebrow").textContent = "AO VIVO DE";
     $("editorialCopy").textContent = `Assistindo a ${camera.name} em ${camera.city || state.city.name}.`;
@@ -2622,7 +2622,7 @@ async function initGlobe() {
           const track = Number(point.track) || 0;
           const altTxt = point.altFt ? `${point.altFt.toLocaleString('pt-BR')} ft` : `${point.alt || 0} m`;
           const spdTxt = point.speed ? `${point.speed} km/h` : '';
-          marker.title = `✈️ ${point.callsign || point.icao} (${point.country || 'Voo'})\nAltitude: ${altTxt}\nVelocidade: ${spdTxt}\nClique para telemetria e AirNav Radar`;
+          marker.title = `✈️ ${point.callsign || point.icao} (${point.country || 'Voo'})\nAltitude: ${altTxt}\nVelocidade: ${spdTxt}\nClique para telemetria e radar aéreo`;
           marker.innerHTML = `
             <svg class="airplane-svg" viewBox="0 0 24 24" style="transform: rotate(${track}deg);">
               <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
@@ -3646,7 +3646,7 @@ async function loadTvGardenWebcams(reset = false) {
   }
 
   const strip = $("tvgardenShowingCount");
-  if (strip) strip.textContent = "Carregando câmeras ao vivo do TV Garden...";
+  if (strip) strip.textContent = "Carregando câmeras ao vivo...";
 
   try {
     let endpoint = "";
@@ -3799,7 +3799,7 @@ async function openTvGardenCountryWebcams(country) {
       state.cameras = data.webcams;
       state.drawerType = "cameras";
       $("drawerTitle").textContent = `Câmeras em ${country.country}`;
-      $("drawerEyebrow").textContent = `TV GARDEN · ${data.webcams.length} TRANSMISSÕES`;
+      $("drawerEyebrow").textContent = `${data.webcams.length} TRANSMISSÕES DISPONÍVEIS`;
       $("drawerSummary").textContent = `${data.webcams.length} câmeras ao vivo encontradas em ${country.country}`;
       updateDrawerState(true);
       renderCameraList();
@@ -3878,7 +3878,7 @@ function openTvSidebarForCurrentCity() {
   const drawer = $("stationDrawer");
   drawer.classList.add("camera-sidebar-glass");
   $("drawerTitle").textContent = `Canais de TV em ${countryName}`;
-  $("drawerEyebrow").textContent = `TV GARDEN · CANAIS AO VIVO`;
+  $("drawerEyebrow").textContent = `CANAIS AO VIVO`;
   $("drawerSummary").textContent = `${state.tvChannels.length} emissoras de TV disponíveis nesta localidade`;
   $("loadMore").classList.add("hidden");
   updateDrawerState(true);
@@ -4044,7 +4044,7 @@ async function loadTvChannelsCatalog(reset = false) {
   }
 
   const strip = $("tvShowingCount");
-  if (strip) strip.textContent = "Carregando canais de TV do TV Garden...";
+  if (strip) strip.textContent = "Carregando canais de TV ao vivo...";
 
   try {
     let endpoint = "";
@@ -4238,8 +4238,8 @@ function renderSearchResults(query, stations = [], fetchedCameras = [], fetchedT
 
   const groups = [
     ["CIDADES", cityResults],
-    ["CANAIS DE TV AO VIVO (TV GARDEN)", tvResults],
-    ["CÂMERAS AO VIVO (TV GARDEN & MUNDO)", cameraResults],
+    ["CANAIS DE TV AO VIVO", tvResults],
+    ["CÂMERAS AO VIVO PELO MUNDO", cameraResults],
     ["RÁDIOS AO VIVO", radioResults]
   ].filter((g) => g[1].length);
 
@@ -4586,7 +4586,7 @@ function setupEvents() {
     const pov = state.globe?.pointOfView();
     if (pov && typeof pov.lat === "number") {
       syncAirNavWithCoords(pov.lat, pov.lng, 8);
-      showToast("📍 AirNav Radar sincronizado com a visão atual do globo");
+      showToast("📍 Radar aéreo sincronizado com a visão atual do globo");
     }
   });
   document.querySelectorAll(".region-chip").forEach((chip) => {
