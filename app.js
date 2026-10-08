@@ -1097,114 +1097,161 @@ function clearFlightRouteArcs() {
   }
 }
 
+function estimateRouteClient(flight) {
+  if (!flight || flight.lat == null || flight.lng == null) return null;
+  const rad = ((Number(flight.track) || 0) * Math.PI) / 180;
+  const forwardVec = { x: Math.sin(rad), y: Math.cos(rad) };
+  const airports = Array.isArray(state.airports) && state.airports.length > 0 ? state.airports : [];
+
+  if (!airports.length) {
+    const distDeg = 4.5;
+    return {
+      estimated: true,
+      found: false,
+      callsign: flight.callsign || flight.icao || '',
+      origin: {
+        iata: "ORG",
+        name: "Aeroporto de Origem",
+        city: flight.country || "Origem",
+        lat: flight.lat - forwardVec.y * distDeg,
+        lon: flight.lng - forwardVec.x * distDeg
+      },
+      destination: {
+        iata: "DES",
+        name: "Aeroporto de Destino",
+        city: "Destino",
+        lat: flight.lat + forwardVec.y * distDeg,
+        lon: flight.lng + forwardVec.x * distDeg
+      },
+      stops: []
+    };
+  }
+
+  let bestOrigin = null, bestOriginScore = -Infinity;
+  let bestDest = null, bestDestScore = -Infinity;
+
+  for (const apt of airports) {
+    if (apt.lat == null || apt.lon == null || !apt.iata) continue;
+    const dKm = distanceKm(flight.lat, flight.lng, apt.lat, apt.lon);
+    if (dKm < 40 || dKm > 6000) continue;
+
+    const dLat = apt.lat - flight.lat;
+    const dLon = (apt.lon - flight.lng) * Math.cos(flight.lat * Math.PI / 180);
+    const hyp = Math.max(0.01, Math.hypot(dLon, dLat));
+    const dot = (dLon * forwardVec.x + dLat * forwardVec.y) / hyp;
+    const weight = (apt.type === "large" ? 3.0 : (apt.type === "medium" ? 1.8 : 0.8));
+
+    // Vetor contrário ao deslocamento = origem
+    const origScore = (-dot * 2.5) + (weight * 0.9) - Math.abs(dKm - 800) / 2800;
+    if (-dot > 0.35 && origScore > bestOriginScore) {
+      bestOriginScore = origScore;
+      bestOrigin = apt;
+    }
+
+    // Vetor a favor do deslocamento = destino
+    const destScore = (dot * 2.5) + (weight * 0.9) - Math.abs(dKm - 1000) / 2800;
+    if (dot > 0.35 && destScore > bestDestScore) {
+      bestDestScore = destScore;
+      bestDest = apt;
+    }
+  }
+
+  return {
+    estimated: true,
+    found: false,
+    callsign: flight.callsign || flight.icao || '',
+    origin: bestOrigin ? { ...bestOrigin, lon: bestOrigin.lon ?? bestOrigin.lng } : null,
+    destination: bestDest ? { ...bestDest, lon: bestDest.lon ?? bestDest.lng } : null,
+    stops: []
+  };
+}
+
 function drawFlightRouteOnGlobe(flight, origin, dest, stops = []) {
   if (!state.globe || typeof state.globe.arcsData !== "function") return;
   const arcs = [];
 
-  const waypoints = [];
-  if (origin && origin.lat != null && origin.lon != null) {
-    waypoints.push({ lat: Number(origin.lat), lng: Number(origin.lon), label: origin.iata || origin.name });
+  const fLat = flight ? Number(flight.lat) : null;
+  const fLng = flight ? Number(flight.lng) : null;
+  const hasFlightPos = fLat != null && !isNaN(fLat) && fLng != null && !isNaN(fLng);
+
+  const oLat = origin && origin.lat != null ? Number(origin.lat) : null;
+  const oLng = origin && (origin.lon != null ? origin.lon : origin.lng) != null ? Number(origin.lon ?? origin.lng) : null;
+  const hasOrigin = oLat != null && !isNaN(oLat) && oLng != null && !isNaN(oLng);
+
+  const dLat = dest && dest.lat != null ? Number(dest.lat) : null;
+  const dLng = dest && (dest.lon != null ? dest.lon : dest.lng) != null ? Number(dest.lon ?? dest.lng) : null;
+  const hasDest = dLat != null && !isNaN(dLat) && dLng != null && !isNaN(dLng);
+
+  // 1. Linha Mestra completa levemente curvada conectando Origem ao Destino (traçado de rota de fundo)
+  if (hasOrigin && hasDest) {
+    arcs.push({
+      startLat: oLat,
+      startLng: oLng,
+      endLat: dLat,
+      endLng: dLng,
+      color: ['rgba(0, 240, 255, 0.45)', 'rgba(192, 132, 252, 0.45)'],
+      alt: 0.055,
+      stroke: 0.20,
+      dashLength: 1,
+      dashGap: 0,
+      animateTime: 0
+    });
   }
-  if (Array.isArray(stops)) {
-    for (const s of stops) {
-      if (s.lat != null && s.lon != null) {
-        waypoints.push({ lat: Number(s.lat), lng: Number(s.lon), label: s.iata || s.name, isStop: true });
+
+  // 2. Trecho Percorrido da Rota: Da Origem até a Aeronave atual (linha nítida e contínua)
+  if (hasOrigin && hasFlightPos) {
+    arcs.push({
+      startLat: oLat,
+      startLng: oLng,
+      endLat: fLat,
+      endLng: fLng,
+      color: ['#00f0ff', '#38bdf8'],
+      alt: 0.045,
+      stroke: 0.25,
+      dashLength: 1,
+      dashGap: 0,
+      animateTime: 0
+    });
+  }
+
+  // 3. Trecho Restante da Rota: Da Aeronave atual até o Destino (linha animada com pulso direcional)
+  if (hasFlightPos && hasDest) {
+    arcs.push({
+      startLat: fLat,
+      startLng: fLng,
+      endLat: dLat,
+      endLng: dLng,
+      color: ['#38bdf8', '#c084fc'],
+      alt: 0.048,
+      stroke: 0.28,
+      dashLength: 0.45,
+      dashGap: 0.18,
+      animateTime: 2000
+    });
+  }
+
+  // 4. Se houver escalas/paradas intermediárias entre a rota
+  if (Array.isArray(stops) && stops.length > 0) {
+    let lastPoint = { lat: oLat, lng: oLng };
+    for (const stop of stops) {
+      const sLat = stop.lat != null ? Number(stop.lat) : null;
+      const sLng = (stop.lon != null ? stop.lon : stop.lng) != null ? Number(stop.lon ?? stop.lng) : null;
+      if (sLat != null && sLng != null && lastPoint.lat != null && lastPoint.lng != null) {
+        arcs.push({
+          startLat: lastPoint.lat,
+          startLng: lastPoint.lng,
+          endLat: sLat,
+          endLng: sLng,
+          color: ['#fbbf24', '#f43f5e'],
+          alt: 0.052,
+          stroke: 0.22,
+          dashLength: 0.4,
+          dashGap: 0.15,
+          animateTime: 2400
+        });
+        lastPoint = { lat: sLat, lng: sLng };
       }
     }
-  }
-  if (dest && dest.lat != null && dest.lon != null) {
-    waypoints.push({ lat: Number(dest.lat), lng: Number(dest.lon), label: dest.iata || dest.name });
-  }
-
-  if (waypoints.length >= 2) {
-    // Desenha as pernas conectando Origem -> Escalas -> Destino em arcos suaves
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const p1 = waypoints[i];
-      const p2 = waypoints[i + 1];
-
-      // Linha pulsante animada na cor ciano para roxo/magenta
-      arcs.push({
-        startLat: p1.lat,
-        startLng: p1.lng,
-        endLat: p2.lat,
-        endLng: p2.lng,
-        color: ['#00e5ff', '#c084fc'],
-        alt: 0.10,
-        stroke: 1.8,
-        dashLength: 0.35,
-        dashGap: 0.15,
-        animateTime: 2200
-      });
-
-      // Linha de base contínua iluminada
-      arcs.push({
-        startLat: p1.lat,
-        startLng: p1.lng,
-        endLat: p2.lat,
-        endLng: p2.lng,
-        color: ['rgba(0, 229, 255, 0.4)', 'rgba(192, 132, 252, 0.4)'],
-        alt: 0.10,
-        stroke: 1.0,
-        dashLength: 1.0,
-        dashGap: 0
-      });
-    }
-
-    // Se a aeronave estiver em voo, desenha arcos ligando a aeronave à trajetória
-    if (origin && dest && flight.lat != null && flight.lng != null) {
-      // Trecho Origem -> Avião (percorrido)
-      arcs.push({
-        startLat: origin.lat,
-        startLng: origin.lon,
-        endLat: flight.lat,
-        endLng: flight.lng,
-        color: ['#00e5ff', '#38bdf8'],
-        alt: 0.07,
-        stroke: 1.5,
-        dashLength: 1.0,
-        dashGap: 0
-      });
-
-      // Trecho Avião -> Destino (restante a percorrer com animação de traço)
-      arcs.push({
-        startLat: flight.lat,
-        startLng: flight.lng,
-        endLat: dest.lat,
-        endLng: dest.lon,
-        color: ['#38bdf8', '#c084fc'],
-        alt: 0.08,
-        stroke: 1.6,
-        dashLength: 0.4,
-        dashGap: 0.2,
-        animateTime: 1800
-      });
-    }
-  } else if (origin && flight.lat != null && flight.lng != null) {
-    arcs.push({
-      startLat: origin.lat,
-      startLng: origin.lon,
-      endLat: flight.lat,
-      endLng: flight.lng,
-      color: ['#00e5ff', '#38bdf8'],
-      alt: 0.08,
-      stroke: 1.8,
-      dashLength: 0.4,
-      dashGap: 0.15,
-      animateTime: 2000
-    });
-  } else if (dest && flight.lat != null && flight.lng != null) {
-    arcs.push({
-      startLat: flight.lat,
-      startLng: flight.lng,
-      endLat: dest.lat,
-      endLng: dest.lon,
-      color: ['#38bdf8', '#c084fc'],
-      alt: 0.08,
-      stroke: 1.8,
-      dashLength: 0.4,
-      dashGap: 0.15,
-      animateTime: 2000
-    });
   }
 
   currentFlightRouteArcs = arcs;
@@ -1354,9 +1401,13 @@ async function selectFlight(flight) {
   if (destCity) destCity.textContent = "";
   if (stopsCont) stopsCont.classList.add("hidden");
 
-  clearFlightRouteArcs();
+  // 1. Traçado preliminar imediato: desenha no globo e no painel no exato instante do clique
+  const quickEst = estimateRouteClient(flight);
+  if (quickEst) {
+    displayFlightRoute(flight, quickEst);
+  }
 
-  // Consulta rota oficial e aeroportos de partida/chegada
+  // 2. Consulta rota oficial e aeroportos de partida/chegada
   try {
     const route = await request(`/api/flights/route?callsign=${encodeURIComponent(cs)}&lat=${flight.lat}&lon=${flight.lng}&track=${flight.track || 0}`);
     if (state.activeFlight === flight && route) {
@@ -1364,7 +1415,7 @@ async function selectFlight(flight) {
     }
   } catch (err) {
     console.warn("Falha ao buscar rota do voo:", err);
-    if (state.activeFlight === flight) {
+    if (state.activeFlight === flight && !quickEst) {
       if (tagEl) tagEl.textContent = "ROTA EM VOO";
       if (originName) originName.textContent = "Origem não catalogada";
       if (destName) destName.textContent = "Destino em rota";
@@ -2900,19 +2951,20 @@ async function initGlobe() {
       .showGraticules(false)
       // Otimização crucial: ignora raycasting de mouse nas 23.200 partículas, garantindo 60 FPS cravados
       .pointerEventsFilter((obj) => obj && obj.__globeObjType !== "particles")
-      // Arcos tridimensionais esféricos de correntes atmosféricas de vento (Forma B - Windy Wind Globe)
+      // Arcos tridimensionais esféricos de rotas e conexões de voo (linhas curvas suaves)
       .arcsData([])
       .arcStartLat((d) => d.startLat)
       .arcStartLng((d) => d.startLng)
       .arcEndLat((d) => d.endLat)
       .arcEndLng((d) => d.endLng)
-      .arcColor((d) => d.color || ['rgba(0,229,255,0.75)', 'rgba(100,255,218,0.25)'])
-      .arcAltitude((d) => d.alt || 0.04)
-      .arcStroke((d) => d.stroke || 0.9)
-      .arcDashLength((d) => d.dashLength || 0.4)
-      .arcDashGap((d) => d.dashGap || 0.15)
+      .arcColor((d) => d.color || ['#00f0ff', '#c084fc'])
+      .arcAltitude((d) => (d.alt !== undefined ? d.alt : 0.045))
+      .arcAltitudeAutoScale((d) => (d.altAutoScale !== undefined ? d.altAutoScale : 0.25))
+      .arcStroke((d) => (d.stroke !== undefined ? d.stroke : 0.22))
+      .arcDashLength((d) => (d.dashLength !== undefined ? d.dashLength : 1))
+      .arcDashGap((d) => (d.dashGap !== undefined ? d.dashGap : 0))
       .arcDashInitialGap((d) => d.initialGap || 0)
-      .arcDashAnimateTime((d) => d.animateTime || 2500)
+      .arcDashAnimateTime((d) => (d.animateTime !== undefined ? d.animateTime : 0))
       // Partículas 2D planas de alta performance para todos os 23.200 pontos (NÃO 3D)
       .particlesData([])
       .particlesList((d) => d.points || [])
