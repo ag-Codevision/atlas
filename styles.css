@@ -5102,6 +5102,158 @@ body.has-active-player .station-drawer {
   padding: 16px;
 }
 
+/* BLOCO DE ROTA DO VOO (ORIGEM -> ESCALAS -> DESTINO) */
+.flight-route-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.flight-route-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.flight-route-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #38bdf8;
+  text-transform: uppercase;
+}
+
+.flight-route-dist {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.flight-route-flow {
+  display: grid;
+  grid-template-columns: 1fr 34px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.flight-endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flight-origin {
+  text-align: left;
+}
+
+.flight-destination {
+  text-align: right;
+}
+
+.endpoint-type {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.endpoint-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.flight-origin .endpoint-code {
+  color: #38bdf8;
+}
+
+.flight-destination .endpoint-code {
+  color: #c084fc;
+}
+
+.endpoint-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.endpoint-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flight-route-arrow-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #38bdf8;
+}
+
+.flight-route-plane-icon {
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+}
+
+.flight-route-line-decor {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #38bdf8, #c084fc);
+  border-radius: 1px;
+}
+
+.flight-stops-container {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.flight-stops-badge {
+  font-weight: 800;
+  color: #f59e0b;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.flight-stops-text {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.flight-airline-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
 .flight-stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

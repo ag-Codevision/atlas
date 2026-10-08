@@ -630,9 +630,9 @@
           <button class="airport-action-btn primary" id="airportFocusRunwayBtn" title="Aproximar zoom nas pistas do aeroporto">
             <span>🛰️ Focar Pistas em Satélite 3D</span>
           </button>
-          <a class="airport-action-btn" id="airportFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Ver tráfego aéreo e aproximações de voos no FlightRadar24">
-            <span>✈️ Rastrear Voos (FlightRadar24) ↗</span>
-          </a>
+          <button class="airport-action-btn" id="airportFlightradarBtn" title="Ativar radar de voos e observar tráfego aéreo na região">
+            <span>✈️ Radar de Voos na Região</span>
+          </button>
           <button class="airport-action-btn" id="airportTuneRadioBtn" title="Ouvir rádios locais da cidade do aeroporto">
             <span>📻 Sintonizar Rádios da Região</span>
           </button>
@@ -650,10 +650,53 @@
           <span class="flight-live-dot"></span>
           <span class="flight-callsign-badge" id="flightCallsign">---</span>
           <span class="flight-country-badge" id="flightCountry">---</span>
+          <span class="flight-airline-badge hidden" id="flightAirlineBadge">---</span>
         </div>
         <button class="icon-button flight-close-btn" id="closeFlightDrawer" aria-label="Fechar detalhes do voo">×</button>
       </div>
+
       <div class="flight-drawer-body">
+        <!-- BLOCO DE ROTA: ORIGEM -> ESCALAS -> DESTINO -->
+        <div class="flight-route-section" id="flightRouteSection">
+          <div class="flight-route-header">
+            <span class="flight-route-tag" id="flightRouteTag">ROTA DE VOO</span>
+            <span class="flight-route-dist" id="flightRouteDist">-- km</span>
+          </div>
+
+          <div class="flight-route-flow">
+            <!-- ORIGEM -->
+            <div class="flight-endpoint flight-origin">
+              <span class="endpoint-type">ORIGEM</span>
+              <div class="endpoint-code" id="flightOriginIata">---</div>
+              <div class="endpoint-name" id="flightOriginName">Identificando origem...</div>
+              <div class="endpoint-sub" id="flightOriginCity">--</div>
+            </div>
+
+            <!-- CONECTOR / SETA COM ÍCONE -->
+            <div class="flight-route-arrow-col">
+              <svg class="flight-route-plane-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+              </svg>
+              <div class="flight-route-line-decor"></div>
+            </div>
+
+            <!-- DESTINO -->
+            <div class="flight-endpoint flight-destination">
+              <span class="endpoint-type">DESTINO</span>
+              <div class="endpoint-code" id="flightDestIata">---</div>
+              <div class="endpoint-name" id="flightDestName">Identificando destino...</div>
+              <div class="endpoint-sub" id="flightDestCity">--</div>
+            </div>
+          </div>
+
+          <!-- PARADAS / ESCALAS (QUANDO EXISTIREM) -->
+          <div class="flight-stops-container hidden" id="flightStopsContainer">
+            <span class="flight-stops-badge">ESCALA:</span>
+            <span class="flight-stops-text" id="flightStopsText">---</span>
+          </div>
+        </div>
+
+        <!-- TELEMETRIA DE VOO -->
         <div class="flight-stats-grid">
           <div class="flight-stat-card">
             <span class="flight-stat-label">ALTITUDE</span>
@@ -676,10 +719,12 @@
             <small class="flight-stat-sub">ICAO 24-bit</small>
           </div>
         </div>
+
+        <!-- AÇÕES NATIVAS -->
         <div class="flight-actions">
-          <a class="flight-action-btn" id="flightFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Rastrear aeronave no FlightRadar24">
-            <span>✈️ Rastrear no FlightRadar24 ↗</span>
-          </a>
+          <button class="flight-action-btn primary" id="btnFocusFlightRoute" type="button" title="Centralizar e enquadrar rota completa no globo">
+            <span>🌐 Enquadrar Rota no Globo</span>
+          </button>
         </div>
       </div>
     </aside>

@@ -142,6 +142,154 @@ async function fetchLiveFlights() {
   return liveFlightFetchPromise;
 }
 
+const cachedFlightRoutes = new Map();
+
+async function lookupFlightRoute(callsign, lat, lon, track) {
+  const cs = (callsign || '').trim().toUpperCase();
+  if (cs && cachedFlightRoutes.has(cs)) {
+    return cachedFlightRoutes.get(cs);
+  }
+
+  // 1. Tenta consulta por callsign oficial
+  if (cs && cs.length >= 3) {
+    try {
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 2600);
+      const resp = await fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      clearTimeout(tId);
+      if (resp.ok) {
+        const body = await resp.json();
+        const routeData = body?.response?.flightroute;
+        if (routeData && routeData.origin && routeData.destination) {
+          const resObj = {
+            found: true,
+            estimated: false,
+            callsign: cs,
+            airline: routeData.airline ? {
+              name: routeData.airline.name || '',
+              iata: routeData.airline.iata || '',
+              icao: routeData.airline.icao || '',
+              country: routeData.airline.country || ''
+            } : null,
+            origin: {
+              name: routeData.origin.name || '',
+              iata: routeData.origin.iata_code || '',
+              icao: routeData.origin.icao_code || '',
+              city: routeData.origin.municipality || '',
+              country: routeData.origin.country_name || routeData.origin.country_iso_name || '',
+              lat: Number(routeData.origin.latitude),
+              lon: Number(routeData.origin.longitude),
+              elevation: routeData.origin.elevation != null ? Math.round(routeData.origin.elevation) : null
+            },
+            destination: {
+              name: routeData.destination.name || '',
+              iata: routeData.destination.iata_code || '',
+              icao: routeData.destination.icao_code || '',
+              city: routeData.destination.municipality || '',
+              country: routeData.destination.country_name || routeData.destination.country_iso_name || '',
+              lat: Number(routeData.destination.latitude),
+              lon: Number(routeData.destination.longitude),
+              elevation: routeData.destination.elevation != null ? Math.round(routeData.destination.elevation) : null
+            },
+            stops: Array.isArray(routeData.midpoints) ? routeData.midpoints.map(m => ({
+              name: m.name || '',
+              iata: m.iata_code || '',
+              icao: m.icao_code || '',
+              city: m.municipality || '',
+              country: m.country_name || '',
+              lat: Number(m.latitude),
+              lon: Number(m.longitude)
+            })) : []
+          };
+          if (cachedFlightRoutes.size > 2000) cachedFlightRoutes.clear();
+          cachedFlightRoutes.set(cs, resObj);
+          return resObj;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Se não houver rota oficial, busca nos aeroportos mundiais por vetor de voo
+  if (!cachedAirports) {
+    try {
+      cachedAirports = JSON.parse(await readFile(resolve(ROOT, 'shared/airports.json'), 'utf8'));
+    } catch {
+      cachedAirports = [];
+    }
+  }
+
+  if (lat != null && lon != null && Array.isArray(cachedAirports) && cachedAirports.length > 0) {
+    const validAirports = cachedAirports.filter(a => a.lat != null && a.lon != null && a.type !== 'closed' && a.iata);
+    const rad = ((Number(track) || 0) * Math.PI) / 180;
+    const forwardVec = { x: Math.sin(rad), y: Math.cos(rad) };
+
+    let bestOrigin = null, bestOriginScore = -Infinity;
+    let bestDest = null, bestDestScore = -Infinity;
+
+    for (const a of validAirports) {
+      const dKm = distanceKm(lat, lon, a.lat, a.lon);
+      if (dKm < 50 || dKm > 3200) continue;
+      const dLat = a.lat - lat;
+      const dLon = (a.lon - lon) * Math.cos(lat * Math.PI / 180);
+      const hyp = Math.max(0.01, Math.hypot(dLon, dLat));
+      const dot = (dLon * forwardVec.x + dLat * forwardVec.y) / hyp;
+      const weight = (a.type === 'large' ? 3.0 : (a.type === 'medium' ? 1.8 : 0.8));
+
+      // Origem: dot negativo (atrás do vetor de movimento)
+      if (dot < -0.3) {
+        const score = -dot * weight / Math.sqrt(dKm);
+        if (score > bestOriginScore) {
+          bestOriginScore = score;
+          bestOrigin = a;
+        }
+      }
+
+      // Destino: dot positivo (à frente do vetor de movimento)
+      if (dot > 0.3) {
+        const score = dot * weight / Math.sqrt(dKm);
+        if (score > bestDestScore) {
+          bestDestScore = score;
+          bestDest = a;
+        }
+      }
+    }
+
+    if (bestOrigin || bestDest) {
+      return {
+        found: false,
+        estimated: true,
+        callsign: cs,
+        origin: bestOrigin ? {
+          name: bestOrigin.name,
+          iata: bestOrigin.iata,
+          icao: bestOrigin.id,
+          city: bestOrigin.city || '',
+          country: bestOrigin.country || '',
+          lat: bestOrigin.lat,
+          lon: bestOrigin.lon,
+          elevation: bestOrigin.elev
+        } : null,
+        destination: bestDest ? {
+          name: bestDest.name,
+          iata: bestDest.iata,
+          icao: bestDest.id,
+          city: bestDest.city || '',
+          country: bestDest.country || '',
+          lat: bestDest.lat,
+          lon: bestDest.lon,
+          elevation: bestDest.elev
+        } : null,
+        stops: []
+      };
+    }
+  }
+
+  return { found: false, estimated: false, callsign: cs, origin: null, destination: null, stops: [] };
+}
+
 const mime = {'.html':'text/html','.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
 const requests = new Map();
 function json(res,status,body,headers={}) {
@@ -802,6 +950,20 @@ export async function api(req,res,url) {
       });
     } catch (err) {
       return json(res, 500, { error: 'Falha ao buscar voos em tempo real: ' + err.message });
+    }
+  }
+  if (path === '/api/flights/route') {
+    const callsign = (params.get('callsign') || '').trim();
+    const lat = coordinate(params.get('lat'), -90, 90);
+    const lon = coordinate(params.get('lon'), -180, 180);
+    const track = number(params, 'track', 0, 0, 360);
+    try {
+      const routeData = await lookupFlightRoute(callsign, lat, lon, track);
+      return json(res, 200, routeData, {
+        'cache-control': 'public, max-age=60, s-maxage=120'
+      });
+    } catch (err) {
+      return json(res, 500, { error: 'Falha ao buscar rota do voo: ' + err.message });
     }
   }
   if (path==='/api/cities') return json(res,200,{cities});

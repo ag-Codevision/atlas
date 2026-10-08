@@ -738,10 +738,6 @@ async function selectAirport(apt) {
   state.currentAirportCam = null;
 
   // Links preliminares imediatos
-  const fr24Btn = $("airportFlightradarBtn");
-  if (fr24Btn) {
-    fr24Btn.href = `https://www.flightradar24.com/${apt.lat.toFixed(4)},${apt.lon.toFixed(4)}/12`;
-  }
   const wikiBtn = $("airportWikiBtn");
   if (wikiBtn) {
     wikiBtn.href = `https://pt.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(apt.name)}`;
@@ -1092,7 +1088,214 @@ async function fetchLiveFlightsData() {
   }
 }
 
-function selectFlight(flight) {
+let currentFlightRouteArcs = [];
+
+function clearFlightRouteArcs() {
+  currentFlightRouteArcs = [];
+  if (state.globe && typeof state.globe.arcsData === "function") {
+    state.globe.arcsData([]);
+  }
+}
+
+function drawFlightRouteOnGlobe(flight, origin, dest, stops = []) {
+  if (!state.globe || typeof state.globe.arcsData !== "function") return;
+  const arcs = [];
+
+  const waypoints = [];
+  if (origin && origin.lat != null && origin.lon != null) {
+    waypoints.push({ lat: Number(origin.lat), lng: Number(origin.lon), label: origin.iata || origin.name });
+  }
+  if (Array.isArray(stops)) {
+    for (const s of stops) {
+      if (s.lat != null && s.lon != null) {
+        waypoints.push({ lat: Number(s.lat), lng: Number(s.lon), label: s.iata || s.name, isStop: true });
+      }
+    }
+  }
+  if (dest && dest.lat != null && dest.lon != null) {
+    waypoints.push({ lat: Number(dest.lat), lng: Number(dest.lon), label: dest.iata || dest.name });
+  }
+
+  if (waypoints.length >= 2) {
+    // Desenha as pernas conectando Origem -> Escalas -> Destino em arcos suaves
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const p1 = waypoints[i];
+      const p2 = waypoints[i + 1];
+
+      // Linha pulsante animada na cor ciano para roxo/magenta
+      arcs.push({
+        startLat: p1.lat,
+        startLng: p1.lng,
+        endLat: p2.lat,
+        endLng: p2.lng,
+        color: ['#00e5ff', '#c084fc'],
+        alt: 0.10,
+        stroke: 1.8,
+        dashLength: 0.35,
+        dashGap: 0.15,
+        animateTime: 2200
+      });
+
+      // Linha de base contínua iluminada
+      arcs.push({
+        startLat: p1.lat,
+        startLng: p1.lng,
+        endLat: p2.lat,
+        endLng: p2.lng,
+        color: ['rgba(0, 229, 255, 0.4)', 'rgba(192, 132, 252, 0.4)'],
+        alt: 0.10,
+        stroke: 1.0,
+        dashLength: 1.0,
+        dashGap: 0
+      });
+    }
+
+    // Se a aeronave estiver em voo, desenha arcos ligando a aeronave à trajetória
+    if (origin && dest && flight.lat != null && flight.lng != null) {
+      // Trecho Origem -> Avião (percorrido)
+      arcs.push({
+        startLat: origin.lat,
+        startLng: origin.lon,
+        endLat: flight.lat,
+        endLng: flight.lng,
+        color: ['#00e5ff', '#38bdf8'],
+        alt: 0.07,
+        stroke: 1.5,
+        dashLength: 1.0,
+        dashGap: 0
+      });
+
+      // Trecho Avião -> Destino (restante a percorrer com animação de traço)
+      arcs.push({
+        startLat: flight.lat,
+        startLng: flight.lng,
+        endLat: dest.lat,
+        endLng: dest.lon,
+        color: ['#38bdf8', '#c084fc'],
+        alt: 0.08,
+        stroke: 1.6,
+        dashLength: 0.4,
+        dashGap: 0.2,
+        animateTime: 1800
+      });
+    }
+  } else if (origin && flight.lat != null && flight.lng != null) {
+    arcs.push({
+      startLat: origin.lat,
+      startLng: origin.lon,
+      endLat: flight.lat,
+      endLng: flight.lng,
+      color: ['#00e5ff', '#38bdf8'],
+      alt: 0.08,
+      stroke: 1.8,
+      dashLength: 0.4,
+      dashGap: 0.15,
+      animateTime: 2000
+    });
+  } else if (dest && flight.lat != null && flight.lng != null) {
+    arcs.push({
+      startLat: flight.lat,
+      startLng: flight.lng,
+      endLat: dest.lat,
+      endLng: dest.lon,
+      color: ['#38bdf8', '#c084fc'],
+      alt: 0.08,
+      stroke: 1.8,
+      dashLength: 0.4,
+      dashGap: 0.15,
+      animateTime: 2000
+    });
+  }
+
+  currentFlightRouteArcs = arcs;
+  state.globe.arcsData(arcs);
+}
+
+function displayFlightRoute(flight, route) {
+  const tagEl = $("flightRouteTag");
+  const distEl = $("flightRouteDist");
+  const originIata = $("flightOriginIata");
+  const originName = $("flightOriginName");
+  const originCity = $("flightOriginCity");
+  const destIata = $("flightDestIata");
+  const destName = $("flightDestName");
+  const destCity = $("flightDestCity");
+  const airlineBadge = $("flightAirlineBadge");
+  const stopsCont = $("flightStopsContainer");
+  const stopsText = $("flightStopsText");
+
+  if (route.airline && route.airline.name && airlineBadge) {
+    airlineBadge.textContent = route.airline.name;
+    airlineBadge.classList.remove("hidden");
+  }
+
+  const origin = route.origin;
+  const dest = route.destination;
+  const stops = Array.isArray(route.stops) ? route.stops : [];
+
+  flight._routeOrigin = origin;
+  flight._routeDest = dest;
+
+  if (tagEl) {
+    tagEl.textContent = route.found ? "ROTA CONFIRMADA" : (route.estimated ? "ROTA ESTIMADA" : "EM VOO");
+  }
+
+  if (origin) {
+    if (originIata) originIata.textContent = origin.iata || origin.icao || "ORG";
+    if (originName) originName.textContent = origin.name || "Aeroporto de Origem";
+    const loc = [origin.city, origin.country].filter(Boolean).join(", ");
+    if (originCity) originCity.textContent = loc || "--";
+  } else {
+    if (originIata) originIata.textContent = "---";
+    if (originName) originName.textContent = "Não informado";
+    if (originCity) originCity.textContent = "--";
+  }
+
+  if (dest) {
+    if (destIata) destIata.textContent = dest.iata || dest.icao || "DES";
+    if (destName) destName.textContent = dest.name || "Aeroporto de Destino";
+    const loc = [dest.city, dest.country].filter(Boolean).join(", ");
+    if (destCity) destCity.textContent = loc || "--";
+  } else {
+    if (destIata) destIata.textContent = "---";
+    if (destName) destName.textContent = "Não informado";
+    if (destCity) destCity.textContent = "--";
+  }
+
+  if (origin && dest && distEl) {
+    const totalDist = Math.round(distanceKm(origin.lat, origin.lon, dest.lat, dest.lon));
+    distEl.textContent = `${totalDist.toLocaleString("pt-BR")} km`;
+  } else if (distEl) {
+    distEl.textContent = "-- km";
+  }
+
+  if (stops.length > 0 && stopsCont && stopsText) {
+    stopsCont.classList.remove("hidden");
+    stopsText.textContent = stops.map(s => `${s.iata || s.name} (${s.city || s.country})`).join(" ➔ ");
+  }
+
+  drawFlightRouteOnGlobe(flight, origin, dest, stops);
+}
+
+function focusFlightRoute() {
+  const f = state.activeFlight;
+  if (!f || !state.globe) return;
+
+  if (f._routeOrigin && f._routeDest) {
+    const o = f._routeOrigin;
+    const d = f._routeDest;
+    const midLat = (o.lat + d.lat) / 2;
+    const midLon = (o.lon + d.lon) / 2;
+    const dist = distanceKm(o.lat, o.lon, d.lat, d.lon);
+    const altitude = Math.min(2.5, Math.max(0.75, dist / 3800));
+    state.globe.pointOfView({ lat: midLat, lng: midLon, altitude }, 1200);
+    showToast(`🌐 Rota de ${o.iata || 'Origem'} para ${d.iata || 'Destino'} enquadrada`);
+  } else {
+    state.globe.pointOfView({ lat: f.lat, lng: f.lng, altitude: 0.9 }, 1000);
+  }
+}
+
+async function selectFlight(flight) {
   if (!flight) return;
   state.activeFlight = flight;
 
@@ -1104,6 +1307,7 @@ function selectFlight(flight) {
 
   const callsignEl = $("flightCallsign");
   const countryEl = $("flightCountry");
+  const airlineBadge = $("flightAirlineBadge");
   const altEl = $("flightAltitude");
   const altMEl = $("flightAltitudeM");
   const spdEl = $("flightSpeed");
@@ -1115,6 +1319,7 @@ function selectFlight(flight) {
   const cs = flight.callsign || flight.icao || "AERONAVE";
   if (callsignEl) callsignEl.textContent = cs;
   if (countryEl) countryEl.textContent = flight.country || "INTERNACIONAL";
+  if (airlineBadge) airlineBadge.classList.add("hidden");
   if (altEl) altEl.textContent = flight.altFt ? `${flight.altFt.toLocaleString("pt-BR")} ft` : "-- ft";
   if (altMEl) altMEl.textContent = flight.alt ? `${flight.alt.toLocaleString("pt-BR")} m` : "-- m";
   if (spdEl) spdEl.textContent = flight.speed ? `${flight.speed} km/h` : "-- km/h";
@@ -1128,12 +1333,42 @@ function selectFlight(flight) {
   const dirName = dirs[Math.round(deg / 22.5) % 16];
   if (headEl) headEl.textContent = `Rumo ${dirName}`;
 
-  const frBtn = $("flightFlightradarBtn");
-  if (frBtn) {
-    frBtn.href = flight.callsign
-      ? `https://www.flightradar24.com/${encodeURIComponent(flight.callsign)}`
-      : `https://www.flightradar24.com/${flight.lat.toFixed(4)},${flight.lng.toFixed(4)}/10`;
-    frBtn.title = `Rastrear aeronave ${cs} no FlightRadar24`;
+  // Reseta estado visual da rota
+  const tagEl = $("flightRouteTag");
+  const distEl = $("flightRouteDist");
+  const originIata = $("flightOriginIata");
+  const originName = $("flightOriginName");
+  const originCity = $("flightOriginCity");
+  const destIata = $("flightDestIata");
+  const destName = $("flightDestName");
+  const destCity = $("flightDestCity");
+  const stopsCont = $("flightStopsContainer");
+
+  if (tagEl) tagEl.textContent = "BUSCANDO ROTA...";
+  if (distEl) distEl.textContent = "-- km";
+  if (originIata) originIata.textContent = "...";
+  if (originName) originName.textContent = "Localizando aeroporto de partida...";
+  if (originCity) originCity.textContent = "";
+  if (destIata) destIata.textContent = "...";
+  if (destName) destName.textContent = "Localizando aeroporto de chegada...";
+  if (destCity) destCity.textContent = "";
+  if (stopsCont) stopsCont.classList.add("hidden");
+
+  clearFlightRouteArcs();
+
+  // Consulta rota oficial e aeroportos de partida/chegada
+  try {
+    const route = await request(`/api/flights/route?callsign=${encodeURIComponent(cs)}&lat=${flight.lat}&lon=${flight.lng}&track=${flight.track || 0}`);
+    if (state.activeFlight === flight && route) {
+      displayFlightRoute(flight, route);
+    }
+  } catch (err) {
+    console.warn("Falha ao buscar rota do voo:", err);
+    if (state.activeFlight === flight) {
+      if (tagEl) tagEl.textContent = "ROTA EM VOO";
+      if (originName) originName.textContent = "Origem não catalogada";
+      if (destName) destName.textContent = "Destino em rota";
+    }
   }
 
   showToast(`✈️ Aeronave ${cs} (${flight.country || ""}) em voo`);
@@ -1143,6 +1378,7 @@ function closeFlightDrawer() {
   const drawer = $("flightDrawer");
   if (drawer) drawer.classList.add("hidden");
   state.activeFlight = null;
+  clearFlightRouteArcs();
 }
 
 // INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
@@ -4654,9 +4890,10 @@ function setupEvents() {
   // Camada de Aeroportos do Mundo (ArcGIS)
   $("btnAirports")?.addEventListener("click", () => toggleAirports());
 
-  // Voos ao Vivo em Tempo Real no Globo 3D (OpenSky Network)
+  // Radar de Voos Globais ao Vivo em Tempo Real no Globo 3D
   $("btnLiveFlights")?.addEventListener("click", () => toggleLiveFlights());
   $("closeFlightDrawer")?.addEventListener("click", closeFlightDrawer);
+  $("btnFocusFlightRoute")?.addEventListener("click", focusFlightRoute);
 
   // Painel e Card Informativo do Aeroporto (Fotos Wikipédia, Webcams, Meteorologia, Ações)
   $("closeAirportDrawer")?.addEventListener("click", closeAirportDrawer);
@@ -4667,6 +4904,15 @@ function setupEvents() {
     const { lat, lon, name } = state.activeAirport;
     state.globe.pointOfView({ lat, lng: lon, altitude: 0.008 }, 1400);
     showToast(`🛰️ Pistas de ${name} aproximadas em Satélite 3D`);
+  });
+  $("airportFlightradarBtn")?.addEventListener("click", () => {
+    if (!state.activeAirport) return;
+    const { lat, lon, name } = state.activeAirport;
+    if (!state.liveFlightsActive) {
+      toggleLiveFlights();
+    }
+    state.globe.pointOfView({ lat, lng: lon, altitude: 0.35 }, 1200);
+    showToast(`✈️ Radar de voos focado em ${name}`);
   });
   $("airportTuneRadioBtn")?.addEventListener("click", () => {
     if (!state.activeAirport) return;
