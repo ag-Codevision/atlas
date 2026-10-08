@@ -4979,16 +4979,22 @@ body.has-active-player .station-drawer {
 
 /* RÉGUA DE CORES POR ALTITUDE DE VOOS (IDENTICA À REFERÊNCIA DO RADAR) */
 .altitude-legend-bar {
+  position: absolute;
+  z-index: 4;
+  right: clamp(28px, 3.5vw, 52px);
+  bottom: calc(6% + 36px);
+  width: 280px;
+  max-width: calc(100vw - 64px);
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  background: rgba(11, 15, 25, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  gap: 4px;
+  background: rgba(11, 15, 25, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  padding: 6px 10px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  min-width: 200px;
+  padding: 6px 12px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   pointer-events: auto;
 }
 
