@@ -286,10 +286,6 @@
                 <span class="mode-icon">✈️</span>
                 <span>AEROPORTOS</span>
               </button>
-              <button class="windy-mode-btn" id="btnAirNavRadar" title="Abrir Radar Aéreo completo" aria-label="Radar Aéreo">
-                <span class="mode-icon">📡</span>
-                <span>RADAR AÉREO</span>
-              </button>
               <button class="windy-mode-btn" id="btnWindMap" title="Abrir mapa de ventos e radar meteorológico em tela cheia" aria-label="Radar Meteorológico">
                 <span class="mode-icon">🌪️</span>
                 <span>RADAR METEOROLÓGICO</span>
@@ -634,11 +630,8 @@
           <button class="airport-action-btn primary" id="airportFocusRunwayBtn" title="Aproximar zoom nas pistas do aeroporto">
             <span>🛰️ Focar Pistas em Satélite 3D</span>
           </button>
-          <a class="airport-action-btn airnav-accent" id="airportAirnavBtn" target="_blank" rel="noopener noreferrer" title="Acompanhar voos, aproximações e tráfego em tempo real no Radar Aéreo">
-            <span>📡 Radar de Voos ao Vivo ↗</span>
-          </a>
-          <a class="airport-action-btn" id="airportFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Ver tráfego aéreo e aproximações de voos">
-            <span>✈️ Tráfego Aéreo Global ↗</span>
+          <a class="airport-action-btn" id="airportFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Ver tráfego aéreo e aproximações de voos no FlightRadar24">
+            <span>✈️ Rastrear Voos (FlightRadar24) ↗</span>
           </a>
           <button class="airport-action-btn" id="airportTuneRadioBtn" title="Ouvir rádios locais da cidade do aeroporto">
             <span>📻 Sintonizar Rádios da Região</span>
@@ -684,87 +677,12 @@
           </div>
         </div>
         <div class="flight-actions">
-          <a class="flight-action-btn airnav-btn" id="flightAirnavBtn" target="_blank" rel="noopener noreferrer">
-            <span class="radar-ping-icon">📡</span>
-            <span>Acompanhar Voo no Radar ↗</span>
+          <a class="flight-action-btn" id="flightFlightradarBtn" target="_blank" rel="noopener noreferrer" title="Rastrear aeronave no FlightRadar24">
+            <span>✈️ Rastrear no FlightRadar24 ↗</span>
           </a>
         </div>
       </div>
     </aside>
-
-    <!-- MODAL RADAR AÉREO GLOBAL (IN-APP) -->
-    <div class="airnav-modal-backdrop hidden" id="airnavModalBackdrop" role="dialog" aria-modal="true" aria-label="Radar Aéreo Global">
-      <div class="airnav-modal-window">
-        <div class="airnav-modal-header">
-          <div class="airnav-modal-title">
-            <span class="airnav-live-pulse"></span>
-            <span class="airnav-icon">📡</span>
-            <div class="airnav-title-texts">
-              <strong>RADAR AÉREO · MONITORAMENTO GLOBAL DE VOOS</strong>
-              <small id="airnavStatusText">Sincronizado com a posição do globo</small>
-            </div>
-          </div>
-          <div class="airnav-modal-actions">
-            <button class="airnav-header-btn" id="airnavSyncGlobeBtn" title="Sincronizar mapa do radar com o ponto de vista do Globo">📍 Centralizar Globo</button>
-            <a class="airnav-header-btn" id="airnavExternalBtn" target="_blank" rel="noopener noreferrer" title="Abrir Radar Aéreo em tela cheia numa nova aba">Abrir em Nova Aba ↗</a>
-            <button class="airnav-close-btn" id="closeAirnavModal" aria-label="Fechar radar">×</button>
-          </div>
-        </div>
-        <div class="airnav-modal-body">
-          <div class="airnav-quick-regions">
-            <span class="quick-regions-label">Destinos Rápidos:</span>
-            <button class="region-chip" data-lat="-23.43" data-lon="-46.47" data-zoom="10">🇧🇷 GRU · Guarulhos</button>
-            <button class="region-chip" data-lat="-22.81" data-lon="-43.25" data-zoom="10">🇧🇷 GIG · Galeão</button>
-            <button class="region-chip" data-lat="-15.87" data-lon="-47.92" data-zoom="10">🇧🇷 BSB · Brasília</button>
-            <button class="region-chip" data-lat="40.64" data-lon="-73.78" data-zoom="10">🇺🇸 JFK · Nova York</button>
-            <button class="region-chip" data-lat="51.47" data-lon="-0.45" data-zoom="10">🇬🇧 LHR · Londres</button>
-            <button class="region-chip" data-lat="35.55" data-lon="139.78" data-zoom="10">🇯🇵 HND · Tóquio</button>
-          </div>
-          <div class="airnav-cockpit-hub">
-            <div class="airnav-radar-display">
-              <div class="radar-scope">
-                <div class="radar-sweep"></div>
-                <div class="radar-ring ring-1"></div>
-                <div class="radar-ring ring-2"></div>
-                <div class="radar-ring ring-3"></div>
-                <div class="radar-crosshair-h"></div>
-                <div class="radar-crosshair-v"></div>
-                <div class="radar-blip blip-1"></div>
-                <div class="radar-blip blip-2"></div>
-                <div class="radar-blip blip-3"></div>
-              </div>
-            </div>
-            <div class="airnav-hub-info">
-              <div class="airnav-hub-badge">
-                <span class="airnav-live-pulse"></span>
-                <span>RADAR AÉREO GLOBAL INTEGRADO</span>
-              </div>
-              <h2 class="airnav-hub-title">Radar Aéreo · Rastreamento de Voos</h2>
-              <p class="airnav-hub-desc">
-                Monitore aviões comerciais, altitudes, velocidades, rotas e aproximações de pistas em tempo real com precisão de telemetria integrada.
-              </p>
-              <div class="airnav-coords-card">
-                <div class="coords-item">
-                  <span>COORDENADAS DE FOCO</span>
-                  <strong id="airnavCockpitCoords">--° , --°</strong>
-                </div>
-                <div class="coords-item">
-                  <span>NÍVEL DE ZOOM</span>
-                  <strong id="airnavCockpitZoom">Radar Regional (z8)</strong>
-                </div>
-              </div>
-              <div class="airnav-hub-actions">
-                <a id="airnavLaunchFullBtn" class="airnav-launch-btn primary" target="_blank" rel="noopener noreferrer">
-                  <span class="btn-radar-icon">📡</span>
-                  <span>Abrir Radar Aéreo em Tela Cheia</span>
-                  <span class="btn-arrow-icon">↗</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 19. MINI LIVE PLAYER FLUTUANTE (PICTURE-IN-PICTURE IN-APP) -->
     <aside class="mini-player hidden" id="miniPlayer" aria-label="Mini player de câmera flutuante">

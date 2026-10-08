@@ -740,8 +740,6 @@ export async function api(req,res,url) {
         airport: {
           ...apt,
           elevM,
-          airnavUrl: `https://pt.airnavradar.com/airport/${apt.id || apt.iata || ''}`,
-          airnavRadarUrl: `https://pt.airnavradar.com/@${lat},${lon},z11`,
           flightradarUrl: `https://www.flightradar24.com/airport/${(apt.iata || apt.id || '').toLowerCase()}`,
           flightawareUrl: `https://flightaware.com/live/airport/${apt.id || apt.iata}`,
           mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`

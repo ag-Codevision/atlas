@@ -29,7 +29,6 @@ const state = {
   flights: [],
   flightsVisible: false,
   activeFlight: null,
-  airnavModalOpen: false,
   windyMapOpen: false,
   windyMapLayer: "wind",
   windyDetailOpen: true,
@@ -739,13 +738,6 @@ async function selectAirport(apt) {
   state.currentAirportCam = null;
 
   // Links preliminares imediatos
-  const airnavBtn = $("airportAirnavBtn");
-  if (airnavBtn) {
-    const code = icaoCode || apt.iata || "";
-    airnavBtn.href = code
-      ? `https://pt.airnavradar.com/airport/${code}`
-      : `https://pt.airnavradar.com/@${apt.lat.toFixed(4)},${apt.lon.toFixed(4)},z11`;
-  }
   const fr24Btn = $("airportFlightradarBtn");
   if (fr24Btn) {
     fr24Btn.href = `https://www.flightradar24.com/${apt.lat.toFixed(4)},${apt.lon.toFixed(4)}/12`;
@@ -895,10 +887,7 @@ async function selectAirport(apt) {
       }
     }
 
-    // 5. Links de Rastreamento de Voos (AirNav Radar & FlightRadar24)
-    if (res.airport && res.airport.airnavUrl && airnavBtn) {
-      airnavBtn.href = res.airport.airnavUrl;
-    }
+    // 5. Links de Rastreamento de Voos (FlightRadar24)
     if (res.links && res.links.flightradar24 && fr24Btn) {
       fr24Btn.href = res.links.flightradar24;
     }
@@ -1122,7 +1111,6 @@ function selectFlight(flight) {
   const trackEl = $("flightTrack");
   const headEl = $("flightHeadingDesc");
   const icaoEl = $("flightIcao");
-  const airnavBtn = $("flightAirnavBtn");
 
   const cs = flight.callsign || flight.icao || "AERONAVE";
   if (callsignEl) callsignEl.textContent = cs;
@@ -1140,11 +1128,12 @@ function selectFlight(flight) {
   const dirName = dirs[Math.round(deg / 22.5) % 16];
   if (headEl) headEl.textContent = `Rumo ${dirName}`;
 
-  if (airnavBtn) {
-    airnavBtn.href = flight.callsign
-      ? `https://pt.airnavradar.com/flight/${encodeURIComponent(flight.callsign)}`
-      : `https://pt.airnavradar.com/@${flight.lat.toFixed(4)},${flight.lng.toFixed(4)},z11`;
-    airnavBtn.title = `Rastrear telemetria de ${cs} no radar aéreo`;
+  const frBtn = $("flightFlightradarBtn");
+  if (frBtn) {
+    frBtn.href = flight.callsign
+      ? `https://www.flightradar24.com/${encodeURIComponent(flight.callsign)}`
+      : `https://www.flightradar24.com/${flight.lat.toFixed(4)},${flight.lng.toFixed(4)}/10`;
+    frBtn.title = `Rastrear aeronave ${cs} no FlightRadar24`;
   }
 
   showToast(`✈️ Aeronave ${cs} (${flight.country || ""}) em voo`);
@@ -1154,77 +1143,6 @@ function closeFlightDrawer() {
   const drawer = $("flightDrawer");
   if (drawer) drawer.classList.add("hidden");
   state.activeFlight = null;
-}
-
-// INTEGRAÇÃO DE RADAR AÉREO (MODAL GLOBAL & SINCRONIZAÇÃO COM GLOBO)
-function toggleAirNavModal(force, targetLat, targetLon, zoom) {
-  const modal = $("airnavModalBackdrop");
-  const btn = $("btnAirNavRadar");
-  if (!modal) return;
-
-  const isHidden = modal.classList.contains("hidden");
-  const shouldOpen = force !== undefined ? force : isHidden;
-  state.airnavModalOpen = shouldOpen;
-
-  modal.classList.toggle("hidden", !shouldOpen);
-  btn?.classList.toggle("active", shouldOpen);
-
-  if (shouldOpen) {
-    let lat = targetLat;
-    let lon = targetLon;
-    let z = zoom || 7;
-
-    if (lat == null || lon == null) {
-      if (state.activeAirport) {
-        lat = state.activeAirport.lat;
-        lon = state.activeAirport.lon;
-        z = 10;
-      } else if (state.activeFlight) {
-        lat = state.activeFlight.lat;
-        lon = state.activeFlight.lng;
-        z = 9;
-      } else {
-        const pov = state.globe?.pointOfView();
-        if (pov && typeof pov.lat === "number") {
-          lat = pov.lat;
-          lon = pov.lng;
-        } else if (state.city) {
-          lat = state.city.lat;
-          lon = state.city.lon;
-        } else {
-          lat = -15.78;
-          lon = -47.92;
-        }
-      }
-    }
-
-    syncAirNavWithCoords(lat, lon, z);
-    showToast("📡 Radar Aéreo: Tráfego ao vivo carregado");
-  }
-}
-
-function syncAirNavWithCoords(lat, lon, zoom = 7) {
-  const extBtn = $("airnavExternalBtn");
-  const launchBtn = $("airnavLaunchFullBtn");
-  const statusEl = $("airnavStatusText");
-  const coordsEl = $("airnavCockpitCoords");
-  const zoomEl = $("airnavCockpitZoom");
-
-  const url = `https://pt.airnavradar.com/@${Number(lat).toFixed(4)},${Number(lon).toFixed(4)},z${zoom}`;
-  if (extBtn) extBtn.href = url;
-  if (launchBtn) {
-    launchBtn.href = url;
-    launchBtn.title = `Abrir radar em ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° em tela cheia`;
-  }
-  if (statusEl) {
-    statusEl.textContent = `Coordenadas: ${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}° (Zoom ${zoom})`;
-  }
-  if (coordsEl) {
-    coordsEl.textContent = `${Number(lat).toFixed(3)}° , ${Number(lon).toFixed(3)}°`;
-  }
-  if (zoomEl) {
-    zoomEl.textContent = `Radar Regional (z${zoom})`;
-  }
 }
 
 // INTEGRAÇÃO WINDY MAP FORECAST (MAPA DE VENTOS & RADAR EM TELA CHEIA)
@@ -4739,26 +4657,6 @@ function setupEvents() {
   // Voos ao Vivo em Tempo Real no Globo 3D (OpenSky Network)
   $("btnLiveFlights")?.addEventListener("click", () => toggleLiveFlights());
   $("closeFlightDrawer")?.addEventListener("click", closeFlightDrawer);
-
-  // Radar Aéreo Completo Global (AirNav Radar)
-  $("btnAirNavRadar")?.addEventListener("click", () => toggleAirNavModal());
-  $("closeAirnavModal")?.addEventListener("click", () => toggleAirNavModal(false));
-  $("airnavSyncGlobeBtn")?.addEventListener("click", () => {
-    const pov = state.globe?.pointOfView();
-    if (pov && typeof pov.lat === "number") {
-      syncAirNavWithCoords(pov.lat, pov.lng, 8);
-      showToast("📍 Radar aéreo sincronizado com a visão atual do globo");
-    }
-  });
-  document.querySelectorAll(".region-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const lat = Number(chip.dataset.lat);
-      const lon = Number(chip.dataset.lon);
-      const zoom = Number(chip.dataset.zoom) || 7;
-      syncAirNavWithCoords(lat, lon, zoom);
-      state.globe?.pointOfView({ lat, lng: lon, altitude: 0.8 }, 1200);
-    });
-  });
 
   // Painel e Card Informativo do Aeroporto (Fotos Wikipédia, Webcams, Meteorologia, Ações)
   $("closeAirportDrawer")?.addEventListener("click", closeAirportDrawer);
