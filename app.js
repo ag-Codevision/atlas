@@ -909,8 +909,6 @@ async function selectAirport(apt) {
 
 // RASTREADOR DE VOOS AO VIVO (VOOS EM TEMPO REAL NO GLOBO 3D)
 let flightPollingTimer = null;
-let flightMovementTimer = null;
-let lastFlightMovementTime = 0;
 
 // Determina a cor do avião de acordo com a altitude em pés (ft) baseado na escala aeronáutica
 function getFlightAltitudeColor(altFt) {
@@ -927,27 +925,39 @@ function getFlightAltitudeColor(altFt) {
   return "#ba68c8";                       // 30.000 - 40.000+ ft: Roxo / Magenta
 }
 
-// Inicia simulação de movimento contínuo em tempo real (Dead Reckoning aeronáutico)
+// Inicia simulação de movimento contínuo em tempo real a 60 FPS (Dead Reckoning aeronáutico de alta precisão)
+let flightMovementRafId = null;
+let lastFlightMovementTime = 0;
+
 function startFlightMovementLoop() {
   stopFlightMovementLoop();
   lastFlightMovementTime = performance.now();
-  flightMovementTimer = setInterval(() => {
-    if (!state.flightsVisible || !Array.isArray(state.flights) || state.flights.length === 0) return;
-    const now = performance.now();
-    const dt = Math.min(2.5, Math.max(0.4, (now - lastFlightMovementTime) / 1000));
+
+  function flightMotionTick(now) {
+    if (!state.flightsVisible || !Array.isArray(state.flights) || state.flights.length === 0) {
+      flightMovementRafId = null;
+      return;
+    }
+
+    const dt = Math.min(0.06, Math.max(0.001, (now - lastFlightMovementTime) / 1000));
     lastFlightMovementTime = now;
 
-    // Atualiza a posição esférica calculada de cada aeronave em voo
+    // Fator de fluidez visual aeronáutica (garante movimento contínuo, perceptível e macio a 60 FPS)
+    const SPEED_SCALE = 3.2;
+
+    const globeInstance = state.globe;
+    const canUpdate3D = globeInstance && typeof globeInstance.getCoords === "function";
+
     for (let i = 0; i < state.flights.length; i++) {
       const f = state.flights[i];
       const spdKmh = Number(f.speed) || 0;
-      if (spdKmh < 30) continue; // Desprezível se parado em solo
+      if (spdKmh < 30) continue; // Aeronave parada ou em solo
 
       const trackDeg = Number(f.track) || 0;
       const trackRad = (trackDeg * Math.PI) / 180;
-      const distM = (spdKmh / 3.6) * dt;
+      const distM = (spdKmh / 3.6) * SPEED_SCALE * dt;
 
-      // Deslocamento esférico em metros para coordenadas geográficas
+      // Deslocamento esférico geográfico contínuo
       const dLat = (distM * Math.cos(trackRad)) / 111320;
       const latRad = (f.lat * Math.PI) / 180;
       const cosLat = Math.max(0.01, Math.cos(latRad));
@@ -961,19 +971,29 @@ function startFlightMovementLoop() {
 
       if (f.lat > 85) f.lat = 85;
       else if (f.lat < -85) f.lat = -85;
+
+      // Atualização direta da coordenada 3D no Three.js CSS2DObject (sem recriar DOM nem disparar layout thrashing)
+      if (canUpdate3D && f.__threeObjHtml && f.__threeObjHtml.position) {
+        if (!f.altGlobe) {
+          f.altGlobe = Math.min(0.045, Math.max(0.012, (f.alt || 5000) / 350000));
+        }
+        const coords = globeInstance.getCoords(f.lat, f.lng, f.altGlobe);
+        if (coords) {
+          f.__threeObjHtml.position.set(coords.x, coords.y, coords.z);
+        }
+      }
     }
 
-    if (state.globe && typeof state.globe.htmlElementsData === "function") {
-      const activePts = typeof getActiveGlobeMarkers === "function" ? getActiveGlobeMarkers() : [];
-      state.globe.htmlElementsData([...activePts, ...state.flights]);
-    }
-  }, 1000);
+    flightMovementRafId = requestAnimationFrame(flightMotionTick);
+  }
+
+  flightMovementRafId = requestAnimationFrame(flightMotionTick);
 }
 
 function stopFlightMovementLoop() {
-  if (flightMovementTimer) {
-    clearInterval(flightMovementTimer);
-    flightMovementTimer = null;
+  if (flightMovementRafId) {
+    cancelAnimationFrame(flightMovementRafId);
+    flightMovementRafId = null;
   }
 }
 
@@ -1008,9 +1028,25 @@ async function toggleLiveFlights(force) {
 
 async function fetchLiveFlightsData() {
   if (!state.flightsVisible) return;
+
+  const existingMap = new Map();
+  if (Array.isArray(state.flights)) {
+    for (const prev of state.flights) {
+      if (prev.icao && prev.__threeObjHtml) {
+        existingMap.set(prev.icao, prev.__threeObjHtml);
+      }
+    }
+  }
+
   try {
     const res = await request("/api/flights/live?limit=650");
     if (res && Array.isArray(res.flights) && res.flights.length > 0) {
+      for (const f of res.flights) {
+        f.altGlobe = Math.min(0.045, Math.max(0.012, (f.alt || 5000) / 350000));
+        if (f.icao && existingMap.has(f.icao)) {
+          f.__threeObjHtml = existingMap.get(f.icao);
+        }
+      }
       state.flights = res.flights;
       const countLabel = $("flightsBtnLabel");
       if (countLabel) {
@@ -1036,19 +1072,23 @@ async function fetchLiveFlightsData() {
           for (let i = 0; i < seedData.states.length && sampled.length < limit; i += step) {
             sampled.push(seedData.states[i]);
           }
-          const flights = sampled.map(s => ({
-            icao: s[0],
-            callsign: (s[1] || '').trim(),
-            country: s[2] || '',
-            lng: Math.round(s[5] * 1000) / 1000,
-            lat: Math.round(s[6] * 1000) / 1000,
-            alt: Math.round(s[7] || 0),
-            altFt: Math.round((s[7] || 0) * 3.28084),
-            speed: Math.round((s[9] || 0) * 3.6),
-            speedKnots: Math.round((s[9] || 0) * 1.94384),
-            track: Math.round(s[10] || 0),
-            type: 'flight'
-          }));
+          const flights = sampled.map(s => {
+            const alt = Math.round(s[7] || 0);
+            return {
+              icao: s[0],
+              callsign: (s[1] || '').trim(),
+              country: s[2] || '',
+              lng: Math.round(s[5] * 1000) / 1000,
+              lat: Math.round(s[6] * 1000) / 1000,
+              alt,
+              altFt: Math.round(alt * 3.28084),
+              altGlobe: Math.min(0.045, Math.max(0.012, alt / 350000)),
+              speed: Math.round((s[9] || 0) * 3.6),
+              speedKnots: Math.round((s[9] || 0) * 1.94384),
+              track: Math.round(s[10] || 0),
+              type: 'flight'
+            };
+          });
           state.flights = flights;
           const countLabel = $("flightsBtnLabel");
           if (countLabel) {
@@ -2730,6 +2770,7 @@ async function initGlobe() {
       .particlesColor((d) => d.color || "#ffffff")
       // Marcador de seleção ativo 2D (Tamanho fixo em tela, sempre pequenininho, nunca escala com o zoom)
       .htmlElementsData([])
+      .htmlTransitionDuration(0)
       .htmlLat("lat")
       .htmlLng("lng")
       .htmlAltitude((d) => d.type === "flight" ? Math.min(0.045, Math.max(0.012, (d.alt || 5000) / 350000)) : 0.002)
