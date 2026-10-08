@@ -907,25 +907,96 @@ async function selectAirport(apt) {
   }
 }
 
-// INTEGRAÇÃO OPENSKY NETWORK (VOOS AO VIVO 3D NO GLOBO)
+// RASTREADOR DE VOOS AO VIVO (VOOS EM TEMPO REAL NO GLOBO 3D)
 let flightPollingTimer = null;
+let flightMovementTimer = null;
+let lastFlightMovementTime = 0;
+
+// Determina a cor do avião de acordo com a altitude em pés (ft) baseado na escala aeronáutica
+function getFlightAltitudeColor(altFt) {
+  const alt = Number(altFt) || 0;
+  if (alt <= 500) return "#d84315";       // 0 - 500 ft: Laranja escuro / vermelho
+  if (alt <= 1000) return "#f57c00";      // 500 - 1.000 ft: Laranja
+  if (alt <= 2000) return "#ff9800";      // 1.000 - 2.000 ft: Âmbar
+  if (alt <= 4000) return "#fbc02d";      // 2.000 - 4.000 ft: Amarelo
+  if (alt <= 6000) return "#c0ca33";      // 4.000 - 6.000 ft: Amarelo-esverdeado (Chartreuse)
+  if (alt <= 8000) return "#7cb342";      // 6.000 - 8.000 ft: Verde claro
+  if (alt <= 10000) return "#00c853";     // 8.000 - 10.000 ft: Verde vívido
+  if (alt <= 20000) return "#00b0ff";     // 10.000 - 20.000 ft: Ciano / Azul celeste
+  if (alt <= 30000) return "#2979ff";     // 20.000 - 30.000 ft: Azul Royal
+  return "#ba68c8";                       // 30.000 - 40.000+ ft: Roxo / Magenta
+}
+
+// Inicia simulação de movimento contínuo em tempo real (Dead Reckoning aeronáutico)
+function startFlightMovementLoop() {
+  stopFlightMovementLoop();
+  lastFlightMovementTime = performance.now();
+  flightMovementTimer = setInterval(() => {
+    if (!state.flightsVisible || !Array.isArray(state.flights) || state.flights.length === 0) return;
+    const now = performance.now();
+    const dt = Math.min(2.5, Math.max(0.4, (now - lastFlightMovementTime) / 1000));
+    lastFlightMovementTime = now;
+
+    // Atualiza a posição esférica calculada de cada aeronave em voo
+    for (let i = 0; i < state.flights.length; i++) {
+      const f = state.flights[i];
+      const spdKmh = Number(f.speed) || 0;
+      if (spdKmh < 30) continue; // Desprezível se parado em solo
+
+      const trackDeg = Number(f.track) || 0;
+      const trackRad = (trackDeg * Math.PI) / 180;
+      const distM = (spdKmh / 3.6) * dt;
+
+      // Deslocamento esférico em metros para coordenadas geográficas
+      const dLat = (distM * Math.cos(trackRad)) / 111320;
+      const latRad = (f.lat * Math.PI) / 180;
+      const cosLat = Math.max(0.01, Math.cos(latRad));
+      const dLng = (distM * Math.sin(trackRad)) / (111320 * cosLat);
+
+      f.lat += dLat;
+      f.lng += dLng;
+
+      if (f.lng > 180) f.lng -= 360;
+      else if (f.lng < -180) f.lng += 360;
+
+      if (f.lat > 85) f.lat = 85;
+      else if (f.lat < -85) f.lat = -85;
+    }
+
+    if (state.globe && typeof state.globe.htmlElementsData === "function") {
+      const activePts = typeof getActiveGlobeMarkers === "function" ? getActiveGlobeMarkers() : [];
+      state.globe.htmlElementsData([...activePts, ...state.flights]);
+    }
+  }, 1000);
+}
+
+function stopFlightMovementLoop() {
+  if (flightMovementTimer) {
+    clearInterval(flightMovementTimer);
+    flightMovementTimer = null;
+  }
+}
 
 async function toggleLiveFlights(force) {
   const shouldShow = force !== undefined ? force : !state.flightsVisible;
   state.flightsVisible = shouldShow;
   const btn = $("btnLiveFlights");
   const legend = $("legendFlights");
+  const altLegend = $("altitudeLegendBar");
   btn?.classList.toggle("active", shouldShow);
   legend?.classList.toggle("hidden", !shouldShow);
+  altLegend?.classList.toggle("hidden", !shouldShow);
 
   if (shouldShow) {
     showToast("🛫 Carregando voos em tempo real...");
     await fetchLiveFlightsData();
     clearInterval(flightPollingTimer);
     flightPollingTimer = setInterval(fetchLiveFlightsData, 16000);
+    startFlightMovementLoop();
     showToast(`🛫 Voos em tempo real ativados (${state.flights.length} aeronaves no ar)`);
   } else {
     clearInterval(flightPollingTimer);
+    stopFlightMovementLoop();
     state.flights = [];
     closeFlightDrawer();
     updateGlobePoints(true);
@@ -2439,11 +2510,13 @@ function renderGlobePointsDirect() {
     });
   }
 
-  // 2. PONTO ATIVO SELECIONADO (Marcador 2D com tamanho fixo em tela - sempre pequenininho e nunca escala no zoom)
+// Retorna marcadores ativos de seleção (aeroporto, câmera, rádio ou cidade)
+function getActiveGlobeMarkers() {
   const activePoints = [];
   if (state.kind === "none" && !state.activeAirport) {
-    // Camadas desabilitadas: mantém globo 100% limpo sem marcadores
-  } else if (state.activeAirport) {
+    return activePoints;
+  }
+  if (state.activeAirport) {
     const apt = state.activeAirport;
     activePoints.push({
       lat: apt.lat,
@@ -2501,6 +2574,11 @@ function renderGlobePointsDirect() {
       payload: state.city
     });
   }
+  return activePoints;
+}
+
+  // 2. PONTO ATIVO SELECIONADO (Marcador 2D com tamanho fixo em tela - sempre pequenininho e nunca escala no zoom)
+  const activePoints = getActiveGlobeMarkers();
 
   // Inclui o ponto ativo com destaque dourado radiante nas partículas 2D (tamanho fixo em tela: 4.6px)
   if (activePoints.length > 0) {
@@ -2660,14 +2738,16 @@ async function initGlobe() {
           const marker = document.createElement("div");
           marker.className = "globe-airplane-marker";
           const track = Number(point.track) || 0;
-          const altTxt = point.altFt ? `${point.altFt.toLocaleString('pt-BR')} ft` : `${point.alt || 0} m`;
+          const altFtVal = Number(point.altFt) || Math.round((Number(point.alt) || 0) * 3.28084);
+          const altTxt = altFtVal ? `${altFtVal.toLocaleString('pt-BR')} ft` : `${point.alt || 0} m`;
           const spdTxt = point.speed ? `${point.speed} km/h` : '';
+          const altColor = getFlightAltitudeColor(altFtVal);
           marker.title = `✈️ ${point.callsign || point.icao} (${point.country || 'Voo'})\nAltitude: ${altTxt}\nVelocidade: ${spdTxt}\nClique para telemetria e radar aéreo`;
           marker.innerHTML = `
-            <svg class="airplane-svg" viewBox="0 0 24 24" style="transform: rotate(${track}deg);">
+            <svg class="airplane-svg" viewBox="0 0 24 24" style="transform: rotate(${track}deg); fill: ${altColor};">
               <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
             </svg>
-            <span class="airplane-callsign-tag">${escapeHtml(point.callsign || point.icao)}</span>
+            <span class="airplane-callsign-tag" style="border-color: ${altColor}; color: ${altColor};">${escapeHtml(point.callsign || point.icao)}</span>
           `;
           marker.addEventListener("click", (e) => {
             e.stopPropagation();

@@ -4920,15 +4920,15 @@ body.has-active-player .station-drawer {
   box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
 }
 
-/* MARCADOR 3D DO AVIÃO NO GLOBO (OPENSKY NETWORK) */
+/* MARCADOR 3D DO AVIÃO NO GLOBO (SEM BRILHO / CORES POR ALTITUDE / MOVIMENTO CONTÍNUO) */
 .globe-airplane-marker {
   position: relative;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
   pointer-events: auto;
   transform-origin: center center;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 1s linear;
   will-change: transform;
   display: flex;
   align-items: center;
@@ -4936,17 +4936,20 @@ body.has-active-player .station-drawer {
 }
 
 .globe-airplane-marker .airplane-svg {
-  width: 19px;
-  height: 19px;
-  fill: #00f0ff;
-  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.85)) drop-shadow(0 0 12px rgba(0, 240, 255, 0.45));
-  transition: transform 0.2s ease, filter 0.2s ease;
+  width: 18px;
+  height: 18px;
+  filter: none !important;
+  stroke: #070b16;
+  stroke-width: 1.35px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  transition: transform 0.2s ease;
+  overflow: visible;
 }
 
 .globe-airplane-marker:hover .airplane-svg {
   transform: scale(1.35);
-  fill: #ffffff;
-  filter: drop-shadow(0 0 10px #00f0ff) drop-shadow(0 0 20px rgba(0, 240, 255, 0.8));
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85)) !important;
 }
 
 .globe-airplane-marker .airplane-callsign-tag {
@@ -4954,9 +4957,9 @@ body.has-active-player .station-drawer {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(10, 15, 29, 0.88);
-  border: 1px solid rgba(0, 240, 255, 0.4);
-  color: #a5f3fc;
+  background: rgba(10, 15, 29, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f1f5f9;
   font-family: var(--font-mono, monospace);
   font-size: 9px;
   font-weight: 700;
@@ -4967,10 +4970,76 @@ body.has-active-player .station-drawer {
   opacity: 0;
   transition: opacity 0.2s ease;
   backdrop-filter: blur(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
 .globe-airplane-marker:hover .airplane-callsign-tag {
   opacity: 1;
+}
+
+/* RÉGUA DE CORES POR ALTITUDE DE VOOS (IDENTICA À REFERÊNCIA DO RADAR) */
+.altitude-legend-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(11, 15, 25, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  min-width: 200px;
+  pointer-events: auto;
+}
+
+.altitude-legend-bar.hidden {
+  display: none !important;
+}
+
+.altitude-legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.altitude-legend-unit {
+  color: #64748b;
+  font-size: 7.5px;
+}
+
+.altitude-scale-gradient {
+  height: 6px;
+  border-radius: 3px;
+  width: 100%;
+  background: linear-gradient(
+    to right,
+    #d84315 0%,
+    #ff6f00 8%,
+    #ffa000 16%,
+    #fbc02d 26%,
+    #c0ca33 38%,
+    #7cb342 50%,
+    #00c853 62%,
+    #00b0ff 76%,
+    #2979ff 88%,
+    #ba68c8 100%
+  );
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.4);
+}
+
+.altitude-scale-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #94a3b8;
+  padding-top: 1px;
 }
 
 /* DRAWER / CARD DO VOO SELECIONADO (TELEMETRIA EM TEMPO REAL) */
